@@ -11,6 +11,8 @@ Cấu trúc folder  :
 - Nhóm clone về xong rồi tạo thư mục folder models cấu trúc như trên nha. Mục đích là mỗi người tự download models về 
 tại nó năng quá nên không push được. 
  - Nhưng mọi chọn ổ đĩa nào trống nhiều nha , ( tổng tầm 5GH )
+ Download model : py .\ChatAILocalLLM\downloadModel.py
+
 
 
 -------------------------------------------------
