@@ -1,0 +1,35 @@
+
+
+-------------------------------------------------
+
+Cấu trúc folder  : 
+
+|--models 
+|
+|--folder_clone_from_github  
+
+Nhóm clone về xong rồi tạo thư mục folder models cấu trúc như trên nha. Mục đích là mỗi người tự download models về 
+tại nó năng quá nên không push được. 
+
+
+-------------------------------------------------
+pip install -r requirements.txt
+- Lúc chạy thì thấy thiếu gì install thì hỏi lại nha , có thể bị xung đột
+- Nếu không xung đột hay lỗi thì viết thêm vào requirements cho thành viên khác nha 
+
+-------------------------------------------------------------------------------
+
+- File downloadModel dùng để tải model 
+- Mọi người ai muốn tải model khác thì chỉ việc đổi lại tên ở filename rồi tải nha 
+
+
+------------------------------------------------------------------
+
+RUN : 
+py .\ChatAILocalLLM\main.py
+
+
+------------------------------------------------------------------------------
+
+- Cái ui nhóm muốn sửa thì nhờ AI nha, cái tool này bên python hơi lạ 
+- Theme tối đang hơi lỏ , nhóm test thì để theme sáng cho dễ nha 
