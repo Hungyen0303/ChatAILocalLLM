@@ -1,38 +1,50 @@
 
-
+Thuận update:
+-> Lưu ý 1: ai máy RAM 8Gb thì trước khi run tắt hết chương trình ko cần + tắt máy ảo/docker,.... + Chrome (cắn RAM vcl ai tranh lại nó)
 -------------------------------------------------
 
-Cấu trúc folder  : 
-
+Cấu trúc folder (sau khi hoàn tất) : 
+Root(LLM)
 |--models 
 |
 |--folder_clone_from_github  
 
+ - Nhưng mọi chọn ổ đĩa nào trống nhiều nha , ( tổng tầm 5GH )
+-> tải tầm 20p, làm đúng phía dưới là ko lỗi. Ko thì 1 tiếng :v
 - Nhóm clone về xong rồi tạo thư mục folder models cấu trúc như trên nha. Mục đích là mỗi người tự download models về 
 tại nó năng quá nên không push được. 
- - Nhưng mọi chọn ổ đĩa nào trống nhiều nha , ( tổng tầm 5GH )
- Download model : py .\ChatAILocalLLM\downloadModel.py
+-> Note: Clone về được LLM/ChatAILocalLLM
 
-
-
--------------------------------------------------
-pip install -r requirements.txt
-- Lúc chạy thì thấy thiếu gì install thì hỏi lại nha , có thể bị xung đột
-- Nếu không xung đột hay lỗi thì viết thêm vào requirements cho thành viên khác nha 
 
 -------------------------------------------------------------------------------
+ - Download model : 
+ + File downloadModel dùng để tải model 
+ + Mọi người ai muốn tải model khác thì chỉ việc đổi lại tên ở filename rồi tải (thêm) nha 
+ --- Terminal/bash/powershelf --- \LLM> 
+    py .\ChatAILocalLLM\downloadModel.py
+ ------------------------------- \LLM> 
+-------------------------------------------------------------------------------
 
-- File downloadModel dùng để tải model 
-- Mọi người ai muốn tải model khác thì chỉ việc đổi lại tên ở filename rồi tải nha 
+
+- Install requirements
+RUN:
+ --- Terminal/bash/powershelf --- \LLM>
+    cd ChatAILocalLLM
+    pip install -r requirements.txt
+ ------------------------------- \LLM\ChatAILocalLLM> 
+- Lúc chạy thì thấy thiếu gì install thì hỏi lại nha , có thể bị xung đột
+- Nếu không xung đột hay lỗi thì viết thêm vào requirements cho thành viên khác nha 
+-------------------------------------------------------------------------------
 
 
-------------------------------------------------------------------
-
+- Run program
 RUN : 
-py .\ChatAILocalLLM\main.py
-
-
+   - New terminal cho Root
+ --- Terminal/bash/powershelf --- \LLM> 
+    py .\main.py
+ ------------------------------- \LLM> 
+ -> rất nặng. Máy ai dưới 16Gb nhớ đọc Lưu ý 1.
 ------------------------------------------------------------------------------
-
-- Cái ui nhóm muốn sửa thì nhờ AI nha, cái tool này bên python hơi lạ 
-- Theme tối đang hơi lỏ , nhóm test thì để theme sáng cho dễ nha 
+- UI
+ + Cái ui nhóm muốn sửa thì nhờ AI nha, cái tool này bên python hơi lạ 
+ + Theme tối đang hơi lỏ , nhóm test thì để theme sáng cho dễ nha 

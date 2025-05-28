@@ -6,7 +6,7 @@ os.makedirs(MODEL_DIR, exist_ok=True)  # Tạo thư mục nếu chưa tồn tạ
 
 REPO_ID = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"   # Đổi theo repo của bạn
 # Tên tệp mô hình
-FILENAME = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"  # Fi
+FILENAME = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"  # File model
 
 # Tải mô hình
 print("Đang tải mô hình...")
