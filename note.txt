@@ -41,7 +41,7 @@ RUN:
 RUN : 
    - New terminal cho Root
  --- Terminal/bash/powershelf --- \LLM> 
-    py .\main.py
+   py .\ChatAILocalLLM\main.py
  ------------------------------- \LLM> 
  -> rất nặng. Máy ai dưới 16Gb nhớ đọc Lưu ý 1.
 ------------------------------------------------------------------------------
