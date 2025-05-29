@@ -1,19 +1,52 @@
+#!/usr/bin/env python3
+"""
+Download model Q3 từ Hugging Face Hub
+"""
+
 import os
 from huggingface_hub import hf_hub_download
+from config import MODEL_REPO_ID, MODEL_FILENAME, MODEL_DIR, get_model_path
 
-MODEL_DIR = "../models"  # Thư mục lưu mô hình
-os.makedirs(MODEL_DIR, exist_ok=True)  # Tạo thư mục nếu chưa tồn tại
+def download_model():
+    """Download model Q3"""
+    
 
-REPO_ID = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"   # Đổi theo repo của bạn
-# Tên tệp mô hình
-FILENAME = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"  # File model
+    
+    print(f"Repository: {MODEL_REPO_ID}")
+    print(f"Filename: {MODEL_FILENAME}")
+    print(f"Target path: {get_model_path()}")
+    
+    # Tạo thư mục models
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    
+    # Kiểm tra xem model đã tồn tại chưa, nếu rồi thì bypass
+    if os.path.exists(get_model_path()):
+        return get_model_path()
+    
+    try:
+        print(f"\nDownloading {MODEL_FILENAME}...")
+        
+        # Download model
+        model_path = hf_hub_download(
+            repo_id=MODEL_REPO_ID,
+            filename=MODEL_FILENAME,
+            local_dir=MODEL_DIR,
+            resume_download=True
+        )
+        
+        print(f"\nDownloaded successfully!")
+        print(f"Model path: {model_path}")
+        
+        return model_path
+        
+    except Exception as e:
+        print(f"Error downloading model: {e}")
+        return None
 
-# Tải mô hình
-print("Đang tải mô hình...")
-model_path = hf_hub_download(
-    repo_id=REPO_ID,
-    filename=FILENAME,
-    local_dir=MODEL_DIR,
-    local_dir_use_symlinks=False
-)
-print(f"Mô hình đã được tải về: {model_path}")
+if __name__ == "__main__":
+    model_path = download_model()
+    
+    if model_path:
+        print("Run application with: python main.py")
+    else:
+        print("\nCannot download model. Please try again.")

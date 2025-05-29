@@ -1,0 +1,17 @@
+
+Hướng dẫn sử dụng sản phẩm
+
+1. Cài đặt:
+- Download file cài đặt
+- Chạy setup.exe
+- Làm theo hướng dẫn
+
+2. Sử dụng cơ bản:
+- Đăng nhập vào hệ thống
+- Chọn chức năng cần thiết
+- Thực hiện thao tác
+
+3. Khắc phục sự cố:
+- Kiểm tra kết nối internet
+- Restart ứng dụng
+- Liên hệ support nếu cần
