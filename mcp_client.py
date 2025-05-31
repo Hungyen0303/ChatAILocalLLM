@@ -286,6 +286,39 @@ class FilesystemManager:
                 "error": str(e),
                 "file": None
             }
+    
+    def classify_files_by_topic(self, topic: str) -> Dict:
+        """Gán label cho từng file, sau đó gom nhóm ở MCP server."""
+        try:
+            from mcp_filesystem_server import file_indexer
+            # Gán label
+            file_indexer.classify_files_by_topic(topic)
+            # Gom nhóm
+            results = file_indexer.get_files_by_category(f"Liên quan: {topic}")
+            files = [
+                {
+                    "filename": f.filename,
+                    "filepath": f.filepath,
+                    "label": f.label,
+                    "type": f.file_type,
+                    "size": f.size,
+                    "content_preview": f.content_preview[:200] + "..." if len(f.content_preview) > 200 else f.content_preview
+                } for f in results
+            ]
+            return {
+                "success": True,
+                "topic": topic,
+                "found": len(files),
+                "files": files
+            }
+        except Exception as e:
+            logger.error(f"Lỗi phân loại theo chủ đề: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "topic": topic,
+                "files": []
+            }
 
 # Instance global để sử dụng trong ứng dụng
 filesystem_manager = FilesystemManager()
@@ -353,6 +386,19 @@ def process_filesystem_query(query: str, query_type: str = "search") -> str:
                 return f"Đã xuất metadata của {result['total_files']} file sẵn sàng gửi MCP Cloud.\n\nCác file đã được phân loại và chuẩn bị metadata."
             else:
                 return f"Lỗi xuất metadata: {result['error']}"
+        
+        elif query_type == "classify_by_topic":
+            result = filesystem_manager.classify_files_by_topic(query)
+            if result["success"]:
+                if result["found"] > 0:
+                    files_text = "\n".join([
+                        f"• {f['filename']}" for f in result["files"]
+                    ])
+                    return f"Tìm thấy {result['found']} file liên quan đến nhóm '{query}':\n{files_text}"
+                else:
+                    return f"Không tìm thấy file nào liên quan đến nhóm '{query}'"
+            else:
+                return f"Lỗi phân loại theo chủ đề: {result['error']}"
         
         else:
             return f"Loại query không được hỗ trợ: {query_type}"

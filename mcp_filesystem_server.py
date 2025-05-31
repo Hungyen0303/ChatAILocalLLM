@@ -16,6 +16,7 @@ from mcp.server import Server
 from mcp.server.models import InitializationOptions
 import mcp.server.stdio
 from pydantic import BaseModel
+from llm_utils import ask_llm_yesno
 
 # Import cấu hình đơn giản
 from config import SUPPORTED_EXTENSIONS, CONTENT_PREVIEW_LIMIT, CATEGORY_KEYWORDS
@@ -195,6 +196,39 @@ class FileIndexer:
                 results.append(metadata)
         return results
 
+    def extract_full_content(self, filepath: Path) -> str:
+        extension = filepath.suffix.lower()
+        try:
+            if extension == '.pdf':
+                with open(filepath, 'rb') as file:
+                    reader = PyPDF2.PdfReader(file)
+                    return "\n".join([page.extract_text() or "" for page in reader.pages])
+            elif extension in ['.docx', '.doc']:
+                doc = docx.Document(filepath)
+                return "\n".join([p.text for p in doc.paragraphs])
+            elif extension in ['.pptx', '.ppt']:
+                prs = Presentation(filepath)
+                return "\n".join([shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, 'text')])
+            elif extension == '.txt':
+                with open(filepath, 'r', encoding='utf-8') as file:
+                    return file.read()
+            else:
+                return ""
+        except Exception as e:
+            logger.error(f"Lỗi đọc toàn bộ nội dung {filepath}: {e}")
+            return ""
+
+    def classify_files_by_topic(self, topic: str):
+        """Cập nhật label cho từng file nếu liên quan chủ đề"""
+        for metadata in self.file_index.values():
+            full_content = self.extract_full_content(Path(metadata.filepath))
+            if len(full_content) > 4000:
+                full_content = full_content[:3000] + '\n...\n' + full_content[-1000:]
+            if not full_content.strip():
+                continue
+            if ask_llm_yesno(full_content, topic):
+                metadata.label = f"Liên quan: {topic}"
+
 # Khởi tạo file indexer
 file_indexer = FileIndexer()
 
@@ -306,6 +340,20 @@ async def handle_list_tools() -> list[types.Tool]:
                 }
             },
         ),
+        types.Tool(
+            name="classify_files_by_topic",
+            description="Phân loại file liên quan đến chủ đề/từ khóa tự nhiên",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Chủ đề hoặc từ khóa tự nhiên"
+                    }
+                },
+                "required": ["topic"]
+            },
+        ),
     ]
 
 @server.call_tool()
@@ -402,6 +450,28 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 return [types.TextContent(type="text", text="Chỉ hỗ trợ định dạng JSON")]
         except Exception as e:
             return [types.TextContent(type="text", text=f"Lỗi xuất metadata: {e}")]
+    
+    elif name == "classify_files_by_topic":
+        topic = arguments.get("topic", "")
+        try:
+            # Gán label cho từng file 
+            file_indexer.classify_files_by_topic(topic)
+            # Gom nhóm các file đã được gán label
+            results = file_indexer.get_files_by_category(f"Liên quan: {topic}")
+            result = {
+                "topic": topic,
+                "count": len(results),
+                "files": [
+                    {
+                        "filename": f.filename,
+                        "label": f.label,
+                        "filepath": f.filepath
+                    } for f in results
+                ]
+            }
+            return [types.TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Lỗi phân loại theo chủ đề: {e}")]
     
     else:
         return [types.TextContent(type="text", text=f"Tool không được hỗ trợ: {name}")]

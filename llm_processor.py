@@ -96,6 +96,11 @@ def detect_intent_and_extract(prompt: str) -> Tuple[str, str, str]:
             if query and len(query) > 1:
                 return intent, query, prompt
     
+    # Thêm pattern cho phân loại theo chủ đề tự nhiên
+    if 'phân loại' in prompt_lower and 'liên quan đến' in prompt_lower:
+        topic = prompt_lower.split('liên quan đến', 1)[-1].strip()
+        return 'classify_by_topic', topic, prompt
+    
     # Simple intent patterns
     if any(word in prompt_lower for word in ['quét', 'scan', 'liệt kê', 'hiển thị file', 'danh sách']):
         return 'scan', '', prompt
@@ -522,6 +527,9 @@ def process_prompt(prompt: str) -> str:
             elif intent == 'export':
                 mcp_result = process_filesystem_query("", "export")
                 logger.info(f"Export returned: {mcp_result[:200]}...")
+            elif intent == 'classify_by_topic':
+                mcp_result = process_filesystem_query(query, "classify_by_topic")
+                logger.info(f"Classify by topic '{query}' returned: {mcp_result[:200]}...")
             else:
                 return generate_simple_response(original_prompt)
             
