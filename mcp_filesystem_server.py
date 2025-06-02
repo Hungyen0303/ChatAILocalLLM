@@ -46,6 +46,7 @@ class FileMetadata(BaseModel):
 
 class FileIndexer:
     """Class quản lý index file"""
+    MCP_CLOUD_API_URL = "http://localhost:8000/upload-metadata" 
     
     def __init__(self, base_path: str = "."):
         self.base_path = Path(base_path)
@@ -434,17 +435,39 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         try:
             files = list(file_indexer.file_index.values())
             
+
             if format_type == "json":
-                # Định dạng cho MCP Cloud
-                metadata_for_cloud = [
-                    {
+                metadata_for_cloud = []
+                success_count = 0
+                error_count = 0
+                error_files = []
+
+                for f in files:
+                    metadata = {
                         "filename": f.filename,
                         "label": f.label,
-                        "content_preview": f.content_preview[:500],
+                        "content": f.content_preview[:500],
                         "file_type": f.file_type,
                         "size": f.size
-                    } for f in files
-                ]
+                    }
+                    metadata_for_cloud.append(metadata)
+
+                    # Gửi metadata lên MCP Cloud
+                    try:
+                        resp = requests.post(MCP_CLOUD_API_URL, json=metadata)
+                        if resp.status_code == 200:
+                            success_count += 1
+                        else:
+                            error_count += 1
+                            error_files.append(f.filename)
+                    except Exception as e:
+                        error_count += 1
+                        error_files.append(f.filename)
+                
+                logger.info(f"Đã gửi {success_count} metadata thành công, {error_count} lỗi")
+                if error_files:
+                    logger.error(f"Các file gặp lỗi: {', '.join(error_files)}")
+
                 return [types.TextContent(type="text", text=json.dumps(metadata_for_cloud, indent=2, ensure_ascii=False))]
             else:
                 return [types.TextContent(type="text", text="Chỉ hỗ trợ định dạng JSON")]
