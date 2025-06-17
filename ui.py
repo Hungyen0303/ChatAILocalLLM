@@ -248,6 +248,7 @@ def create_interface():
                             "Tìm file có từ python",
                             "Quét thư mục và hiển thị file",
                             "Phân loại tất cả file",
+                            "Phân loại các file liên quan đến tài chính",
                             "Xuất metadata để backup",
                             "Có file nào về machine learning không?"
                         ],

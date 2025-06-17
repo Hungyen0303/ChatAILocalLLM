@@ -23,3 +23,6 @@ pathlib2>=2.3.7
 # System utilities
 psutil>=5.9.0
 numpy>=1.24.0
+
+# API cloud
+uvicorn
