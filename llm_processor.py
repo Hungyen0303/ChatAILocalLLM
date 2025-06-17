@@ -2,7 +2,6 @@ import os
 import re
 from llama_cpp import Llama
 import logging
-from typing import Tuple, Optional
 
 # Import cấu hình đơn giản
 from config import MODEL_DIR, MODEL_FILENAME, get_model_path
@@ -25,18 +24,18 @@ MODEL_PATH = get_model_path()
 if not os.path.exists(MODEL_PATH):
     raise FileNotFoundError(f"Model file not found at: {MODEL_PATH}")
 
-# Khởi tạo mô hình với các tham số tối ưu
+# Khởi tạo mô hình
 try:
     llm = Llama(
         model_path=MODEL_PATH,
-        n_ctx=2048,         # Tối ưu context window
-        n_threads=8,        # Tăng threads cho performance
-        n_batch=256,        # Tăng batch size
-        use_mlock=True,     # Lock memory để tránh swap
+        n_ctx=2048,
+        n_threads=8,
+        n_batch=128,
+        use_mlock=True,
         verbose=False,
         chat_format="llama-3"
     )
-    logger.info(f"Model loaded successfully: {MODEL_FILENAME}")
+    logger.info(f"Model loaded: {MODEL_FILENAME}")
 except Exception as e:
     logger.error(f"Error loading model: {e}")
     raise
@@ -45,28 +44,16 @@ except Exception as e:
 if MCP_AVAILABLE:
     try:
         initialize_filesystem()
-        logger.info("MCP Filesystem initialized successfully")
+        logger.info("MCP Filesystem initialized")
     except Exception as e:
         logger.warning(f"MCP Filesystem initialization failed: {e}")
         MCP_AVAILABLE = False
 
-# =============================================================================
-# PATTERN DETECTION & INTENT RECOGNITION
-# =============================================================================
-
-def detect_intent_and_extract(prompt: str) -> Tuple[str, str, str]:
-    """
-    Phát hiện intent và trích xuất dữ liệu từ prompt sử dụng patterns
-    
-    Args:
-        prompt (str): Câu lệnh từ người dùng
-        
-    Returns:
-        Tuple[str, str, str]: (intent, query, original_prompt)
-    """
+def detect_intent_and_extract(prompt: str) -> tuple:
+    """Detect intent and extract data using patterns - preserve original prompt"""
     prompt_lower = prompt.lower().strip()
     
-    # Enhanced search patterns với nhiều biến thể
+    # Enhanced search patterns with more variations
     search_patterns = [
         # Quoted search terms
         (r'tìm file.*?["\']([^"\']+)["\']', 'search'),
@@ -94,7 +81,7 @@ def detect_intent_and_extract(prompt: str) -> Tuple[str, str, str]:
             # Clean up extracted query
             query = clean_extracted_query(query)
             if query and len(query) > 1:
-                return intent, query, prompt
+                return intent, query, prompt  # Return original prompt too
     
     # Simple intent patterns
     if any(word in prompt_lower for word in ['quét', 'scan', 'liệt kê', 'hiển thị file', 'danh sách']):
@@ -119,15 +106,7 @@ def detect_intent_and_extract(prompt: str) -> Tuple[str, str, str]:
     return 'general', '', prompt
 
 def clean_extracted_query(query: str) -> str:
-    """
-    Làm sạch query được trích xuất từ prompt
-    
-    Args:
-        query (str): Query thô cần làm sạch
-        
-    Returns:
-        str: Query đã được làm sạch
-    """
+    """Clean extracted search query"""
     if not query:
         return ""
     
@@ -152,27 +131,12 @@ def clean_extracted_query(query: str) -> str:
     
     return query.strip()  # Return original if cleaning failed
 
-# =============================================================================
-# RESULT FORMATTING
-# =============================================================================
-
 def format_mcp_result(result: str, intent: str, query: str = '', original_prompt: str = '') -> str:
-    """
-    Format kết quả MCP với cải tiến hiển thị
-    
-    Args:
-        result (str): Kết quả thô từ MCP
-        intent (str): Intent được phát hiện
-        query (str): Query tìm kiếm (nếu có)
-        original_prompt (str): Prompt gốc
-        
-    Returns:
-        str: Kết quả đã được format đẹp
-    """
+    """Format MCP result using patterns - improved detection"""
     
     if intent == 'search':
         if 'Không tìm thấy' in result or 'No files found' in result or not result.strip():
-            return f"🔍 Không tìm thấy file nào với từ khóa '{query}'"
+            return f"Không tìm thấy file nào với từ khóa '{query}'"
         
         # Clean and process the result for better presentation
         cleaned_result = clean_search_result(result, query)
@@ -181,11 +145,11 @@ def format_mcp_result(result: str, intent: str, query: str = '', original_prompt
         file_count = count_files_in_text(cleaned_result)
         
         if file_count == 0:
-            return f"🔍 Không có kết quả tìm kiếm cho '{query}'\n\n📄 Dữ liệu trả về:\n{result}"
+            return f"Không có kết quả tìm kiếm cho '{query}'\n\nDữ liệu trả về:\n{result}"
         elif file_count == 1:
-            return f"✅ Tìm thấy 1 file với từ khóa '{query}':\n\n{cleaned_result}"
+            return f"Tìm thấy 1 file với từ khóa '{query}':\n\n{cleaned_result}"
         else:
-            return f"✅ Tìm thấy {file_count} file với từ khóa '{query}':\n\n{cleaned_result}"
+            return f"Tìm thấy {file_count} file với từ khóa '{query}':\n\n{cleaned_result}"
     
     elif intent == 'scan':
         # Check for successful scan - look for actual data instead of "success" word
@@ -211,9 +175,9 @@ def format_mcp_result(result: str, intent: str, query: str = '', original_prompt
                                        else 0 for match in matches)
                     break
             
-            return f"📂 Quét thư mục hoàn thành\n📊 Tổng số file: {file_count}\n\n{result}"
+            return f"Quét thư mục hoàn thành\nTổng số file: {file_count}\n\n{result}"
         else:
-            return f"❌ Lỗi quét thư mục: {result}"
+            return f"Lỗi quét thư mục: {result}"
     
     elif intent == 'classify':
         # Check for classification data
@@ -222,9 +186,9 @@ def format_mcp_result(result: str, intent: str, query: str = '', original_prompt
         ])
         
         if has_classification:
-            return f"📋 Phân loại file thành công:\n\n{result}"
+            return f"Phân loại file thành công:\n\n{result}"
         else:
-            return f"❌ Lỗi phân loại: {result}"
+            return f"Lỗi phân loại: {result}"
     
     elif intent == 'export':
         # Check if export was successful and has detailed data
@@ -235,152 +199,13 @@ def format_mcp_result(result: str, intent: str, query: str = '', original_prompt
         if has_export_data and len(result.strip()) > 50:
             # Format detailed metadata export
             formatted_export = format_export_metadata(result)
-            return f"📤 Xuất metadata thành công\n\n{formatted_export}"
+            return f"Xuất metadata thành công\n\n{formatted_export}"
         elif 'success' in result.lower() or 'exported' in result.lower() or 'xuất' in result.lower():
-            return f"✅ Xuất metadata thành công\n📦 Dữ liệu đã sẵn sàng\n\n{result}"
+            return f"Xuất metadata thành công\nDữ liệu đã sẵn sàng\n\n{result}"
         else:
-            return f"❌ Lỗi xuất metadata: {result}"
+            return f"Lỗi xuất metadata: {result}"
     
     return result
-
-def format_export_metadata(result: str) -> str:
-    """
-    Format metadata export để hiển thị thông tin chi tiết cho từng file
-    
-    Args:
-        result (str): Kết quả export thô
-        
-    Returns:
-        str: Metadata đã được format đẹp
-    """
-    
-    lines = result.strip().split('\n')
-    formatted_lines = []
-    
-    # Add header
-    formatted_lines.append("📋 CHI TIẾT METADATA CÁC FILE:")
-    formatted_lines.append("=" * 60)
-    
-    file_count = 0
-    current_file = {}
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-            
-        # Skip summary lines
-        if any(skip_phrase in line.lower() for skip_phrase in [
-            'đã xuất metadata', 'sẵn sàng gửi', 'đã được phân loại', 'chuẩn bị metadata'
-        ]):
-            continue
-            
-        # Detect file entries
-        if line.startswith('•') or line.startswith('-') or 'Filename:' in line:
-            # Save previous file if exists
-            if current_file:
-                formatted_lines.append(format_single_file_metadata(current_file, file_count))
-                current_file = {}
-            
-            file_count += 1
-            
-            # Extract filename and basic info
-            if line.startswith('•') or line.startswith('-'):
-                # Format: • filename.ext (Category) - size
-                match = re.search(r'[•-]\s*(.+?)\s*(?:\(([^)]+)\))?\s*(?:-\s*(\d+\s*bytes?))?', line)
-                if match:
-                    filename = match.group(1).strip()
-                    category = match.group(2).strip() if match.group(2) else "Chưa phân loại"
-                    size = match.group(3).strip() if match.group(3) else "Unknown"
-                    
-                    current_file = {
-                        'filename': filename,
-                        'category': category,
-                        'size': size,
-                        'raw_line': line
-                    }
-            elif 'Filename:' in line:
-                filename = line.replace('Filename:', '').strip()
-                current_file = {'filename': filename}
-                
-        # Extract additional metadata fields
-        elif ':' in line and current_file:
-            key, value = line.split(':', 1)
-            key = key.strip().lower()
-            value = value.strip()
-            
-            if key in ['size', 'kích thước']:
-                current_file['size'] = value
-            elif key in ['category', 'nhóm', 'phân loại']:
-                current_file['category'] = value
-            elif key in ['path', 'đường dẫn']:
-                current_file['path'] = value
-            elif key in ['type', 'loại']:
-                current_file['type'] = value
-            elif key in ['modified', 'sửa đổi', 'last modified']:
-                current_file['modified'] = value
-            elif key in ['created', 'tạo', 'created date']:
-                current_file['created'] = value
-    
-    # Add the last file
-    if current_file:
-        formatted_lines.append(format_single_file_metadata(current_file, file_count))
-    
-    # Add summary
-    formatted_lines.append("=" * 60)
-    formatted_lines.append(f"📊 TỔNG KẾT: {file_count} file đã được xuất metadata")
-    formatted_lines.append("✅ Sẵn sàng gửi đến MCP Cloud Storage")
-    
-    return '\n'.join(formatted_lines)
-
-def format_single_file_metadata(file_data: dict, file_num: int) -> str:
-    """
-    Format metadata cho một file riêng lẻ
-    
-    Args:
-        file_data (dict): Dữ liệu metadata của file
-        file_num (int): Số thứ tự file
-        
-    Returns:
-        str: Metadata file đã được format
-    """
-    
-    lines = []
-    lines.append(f"\n📄 FILE #{file_num}:")
-    lines.append("-" * 40)
-    
-    # Essential fields
-    if 'filename' in file_data:
-        lines.append(f"📝 Tên file: {file_data['filename']}")
-    
-    if 'category' in file_data:
-        lines.append(f"📂 Phân loại: {file_data['category']}")
-    
-    if 'size' in file_data:
-        lines.append(f"💾 Kích thước: {file_data['size']}")
-    
-    # Optional fields
-    if 'type' in file_data:
-        lines.append(f"🔧 Loại file: {file_data['type']}")
-    
-    if 'path' in file_data:
-        lines.append(f"📍 Đường dẫn: {file_data['path']}")
-    
-    if 'modified' in file_data:
-        lines.append(f"⏰ Sửa đổi: {file_data['modified']}")
-    
-    if 'created' in file_data:
-        lines.append(f"🆕 Tạo lúc: {file_data['created']}")
-    
-    # Add raw line if no structured data
-    if len(file_data) <= 2 and 'raw_line' in file_data:
-        lines.append(f"📋 Thông tin: {file_data['raw_line']}")
-    
-    return '\n'.join(lines)
-
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
 
 def count_files_in_text(text: str) -> int:
     """Count unique files in text - consistent with cleaning logic"""

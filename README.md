@@ -1,5 +1,7 @@
 
-# Lưu Ý:  models -> rất nặng. Máy ai dưới 16Gb nhớ đọc Lưu ý 1.
+# Lưu Ý 2:  models -> rất nặng. Máy ai dưới 16Gb nhớ đọc Lưu ý 1.
+            Nhớ đổi   n_threads= số core CPU,
+
 # Document Management System - DoAnCNM
 
 ## Tổng quan
