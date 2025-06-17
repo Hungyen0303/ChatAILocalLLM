@@ -83,11 +83,10 @@ def detect_intent(prompt: str) -> tuple:
     """
 
     # tìm intent từ fragment prompt
-    intent = llm.create_completion(
-        prompt=fragment_prompt,
-        max_tokens=30,
+    intent = llm.create_chat_completion(
+        messages=[{"role": "user", "content": fragment_prompt}],
         temperature=0.1,
-        top_p=0.1,
+        max_tokens=30,
         stop=["\n"],
     )
 
