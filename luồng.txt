@@ -1,0 +1,6 @@
+1/ nhận user_promt  từ Frontend
+2/ phân tích intent
+3/ dựa vào intent, gọi handler tương ứng
+4/ handler xử lý user_promt -> tạo targets
+5/ Ghép targets và files (file name, content) từ index 
+6/ generate kết quả

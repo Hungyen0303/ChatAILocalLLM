@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""
-Cấu hình đơn giản cho Chat AI Local LLM
-"""
 
 import os
 
 # =============================================================================
-# CẤU HÌNH MODEL - Quan trọng nhất
+# CẤU HÌNH MODEL
 # =============================================================================
 
-# Model Q3 để tối ưu tốc độ
+# Model Q3
 MODEL_REPO_ID = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
 MODEL_FILENAME = "Meta-Llama-3-8B-Instruct.Q3_K_M.gguf"
 MODEL_DIR = "../models"
@@ -30,7 +27,8 @@ CATEGORY_KEYWORDS = {
     "A": ["kế hoạch", "plan", "chiến lược", "strategy"],
     "B": ["marketing", "quảng cáo", "bán hàng", "sales"], 
     "C": ["báo cáo", "report", "thống kê", "statistics"],
-    "D": ["hướng dẫn", "guide", "manual", "tutorial"]
+    "D": ["hướng dẫn", "guide", "manual", "tutorial"],
+    "E": ["khác", "other", "miscellaneous", "miscellany"]
 }
 
 # =============================================================================

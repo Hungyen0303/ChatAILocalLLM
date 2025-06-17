@@ -10,6 +10,7 @@ import subprocess
 import sys
 from typing import Dict, List, Any, Optional
 import logging
+from config import CONTENT_PREVIEW_LIMIT
 
 logger = logging.getLogger(__name__)
 
@@ -79,13 +80,13 @@ class MCPFilesystemClient:
             return {"error": str(e)}
 
 # Khởi tạo MCP client global
-mcp_client = MCPFilesystemClient()
+mcp_filesystem_client = MCPFilesystemClient()
 
 class FilesystemManager:
     """Wrapper class để sử dụng dễ dàng từ ứng dụng chính"""
     
     def __init__(self):
-        self.client = mcp_client
+        self.client = mcp_filesystem_client
     
     async def initialize(self):
         """Khởi tạo filesystem manager"""
@@ -113,7 +114,7 @@ class FilesystemManager:
                         "label": f.label,
                         "size": f.size,
                         "type": f.file_type,
-                        "content_preview": f.content_preview[:200] + "..." if len(f.content_preview) > 200 else f.content_preview
+                        "content_preview": f.content_preview[:CONTENT_PREVIEW_LIMIT] + "..." if len(f.content_preview) > CONTENT_PREVIEW_LIMIT else f.content_preview
                     } for f in files
                 ],
                 "total": len(files)
@@ -149,7 +150,7 @@ class FilesystemManager:
                         "label": f.label,
                         "type": f.file_type,
                         "size": f.size,
-                        "content_preview": f.content_preview[:200] + "..." if len(f.content_preview) > 200 else f.content_preview
+                        "content_preview": f.content_preview[:CONTENT_PREVIEW_LIMIT] + "..." if len(f.content_preview) > CONTENT_PREVIEW_LIMIT else f.content_preview
                     } for f in results
                 ]
             }
@@ -225,7 +226,7 @@ class FilesystemManager:
                 metadata_for_cloud.append({
                     "filename": f.filename,
                     "label": f.label,
-                    "content_preview": f.content_preview[:500],  # Giới hạn 500 ký tự
+                    "content_preview": f.content_preview[:CONTENT_PREVIEW_LIMIT], 
                     "file_type": f.file_type,
                     "size": f.size,
                     "filepath": f.filepath.replace("\\", "/")  # Chuẩn hóa đường dẫn
@@ -302,7 +303,7 @@ class FilesystemManager:
                     "label": f.label,
                     "type": f.file_type,
                     "size": f.size,
-                    "content_preview": f.content_preview[:200] + "..." if len(f.content_preview) > 200 else f.content_preview
+                    "content_preview": f.content_preview[:CONTENT_PREVIEW_LIMIT] + "..." if len(f.content_preview) > CONTENT_PREVIEW_LIMIT else f.content_preview
                 } for f in results
             ]
             return {

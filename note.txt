@@ -19,7 +19,7 @@ tại nó năng quá nên không push được.
 -------------------------------------------------------------------------------
  - Download model : 
  + File downloadModel dùng để tải model 
- + Mọi người ai muốn tải model khác thì chỉ việc đổi lại tên ở filename rồi tải (thêm) nha 
+ + Mọi người ai muốn tải model khác thì chỉ việc đổi lại ở file Config rồi tải (thêm) nha 
  --- Terminal/bash/powershelf --- \LLM> 
     py .\ChatAILocalLLM\downloadModel.py
  ------------------------------- \LLM> 

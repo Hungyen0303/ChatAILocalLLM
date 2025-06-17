@@ -117,26 +117,32 @@ class FileIndexer:
         else:
             return ""
     
-    def classify_file(self, content: str, filename: str) -> str:
-        """Phân loại file dựa trên nội dung và tên file"""
+    def classify_file(self, content: str, filename: str, categories: Dict[str, List[str]] = None) -> str:
+        """Phân loại file dựa trên nội dung và tên file
+        
+        Args:
+            content: Nội dung file
+            filename: Tên file
+            categories: Dictionary chứa các nhóm và từ khóa tương ứng. 
+                       Format: {"Tên nhóm": ["từ khóa 1", "từ khóa 2", ...]}
+        """
         content_lower = content.lower()
         filename_lower = filename.lower()
         
-        # Quy tắc phân loại sử dụng CATEGORY_KEYWORDS
-        if any(keyword in content_lower or keyword in filename_lower 
-               for keyword in CATEGORY_KEYWORDS["A"]):
-            return "Nhóm A - Kế hoạch"
-        elif any(keyword in content_lower or keyword in filename_lower 
-                 for keyword in CATEGORY_KEYWORDS["B"]):
-            return "Nhóm B - Marketing"
-        elif any(keyword in content_lower or keyword in filename_lower 
-                 for keyword in CATEGORY_KEYWORDS["C"]):
-            return "Nhóm C - Báo cáo"
-        elif any(keyword in content_lower or keyword in filename_lower 
-                 for keyword in CATEGORY_KEYWORDS["D"]):
-            return "Nhóm D - Hướng dẫn"
-        else:
-            return "Nhóm E - Khác"
+        # Sử dụng categories được truyền vào hoặc thông báo lỗi nếu không có categories
+        if categories is None:
+            raise ValueError("Categories dictionary is required for classification")
+            
+        categories_to_check = categories
+        
+        # Kiểm tra từng nhóm
+        for group_name, keywords in categories_to_check.items():
+            if any(keyword in content_lower or keyword in filename_lower 
+                   for keyword in keywords):
+                return f"Nhóm {group_name}"
+        
+        # Nếu không khớp với nhóm nào
+        return "Nhóm Khác"
     
     def scan_directory(self, directory: Path = None) -> List[FileMetadata]:
         """Quét thư mục và tạo index file"""
@@ -504,7 +510,6 @@ async def main():
     # Quét thư mục ban đầu
     logger.info("Khởi động MCP Filesystem Server...")
     logger.info("Quét thư mục ban đầu...")
-    
     try:
         initial_files = file_indexer.scan_directory()
         logger.info(f"Đã index {len(initial_files)} file ban đầu")

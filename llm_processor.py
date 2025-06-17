@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from llama_cpp import Llama
@@ -49,66 +50,51 @@ if MCP_AVAILABLE:
         logger.warning(f"MCP Filesystem initialization failed: {e}")
         MCP_AVAILABLE = False
 
-def detect_intent_and_extract(prompt: str) -> tuple:
-    """Detect intent and extract data using patterns - preserve original prompt"""
-    prompt_lower = prompt.lower().strip()
+
+#===================== detect_intent =====================
+
+def detect_intent(prompt: str) -> tuple:
+    """Detect intent"""
     
-    # Enhanced search patterns with more variations
-    search_patterns = [
-        # Quoted search terms
-        (r'tìm file.*?["\']([^"\']+)["\']', 'search'),
-        (r'tìm.*?file.*?["\']([^"\']+)["\']', 'search'),
-        (r'file.*?có.*?["\']([^"\']+)["\']', 'search'),
-        (r'search.*?["\']([^"\']+)["\']', 'search'),
-        
-        # Natural language patterns
-        (r'(?:tôi )?(?:cần )?(?:muốn )?tìm file\s+(.+?)(?:\s+trong|\s*$)', 'search'),
-        (r'(?:tôi )?(?:cần )?(?:muốn )?tìm.*?file.*?(\w.+?)(?:\s+trong|\s*$)', 'search'),
-        (r'(?:tôi )?(?:cần )?(?:muốn )?search.*?file.*?(\w.+?)(?:\s+trong|\s*$)', 'search'),
-        (r'file.*?có.*?(\w.+?)(?:\s+không|\s*$)', 'search'),
-        (r'có file.*?về\s+(.+?)(?:\s*$)', 'search'),
-        (r'(?:tôi )?(?:cần )?tìm\s+(.+?)(?:\s+file|\s*$)', 'search'),
-        
-        # More flexible patterns
-        (r'(?:tôi )?(?:cần )?(?:muốn )?(?:tìm|search|tim)\s+(?:file\s+)?(.+?)(?:\s+(?:trong|ở|tại)|\s*$)', 'search'),
-    ]
-    
-    # Check search patterns first
-    for pattern, intent in search_patterns:
-        match = re.search(pattern, prompt_lower)
-        if match:
-            query = match.group(1).strip()
-            # Clean up extracted query
-            query = clean_extracted_query(query)
-            if query and len(query) > 1:
-                return intent, query, prompt  # Return original prompt too
-    
-    # Thêm pattern cho phân loại theo chủ đề tự nhiên
-    if 'phân loại' in prompt_lower and 'liên quan đến' in prompt_lower:
-        topic = prompt_lower.split('liên quan đến', 1)[-1].strip()
-        return 'classify_by_topic', topic, prompt
-    
-    # Simple intent patterns
-    if any(word in prompt_lower for word in ['quét', 'scan', 'liệt kê', 'hiển thị file', 'danh sách']):
-        return 'scan', '', prompt
-    
-    if any(word in prompt_lower for word in ['phân loại', 'classify', 'nhóm', 'categorize', 'sắp xếp']):
-        return 'classify', '', prompt
-    
-    if any(word in prompt_lower for word in ['xuất', 'export', 'metadata', 'gửi cloud']):
-        return 'export', '', prompt
-    
-    # Fallback for search without clear patterns
-    search_keywords = ['tìm', 'search', 'file', 'tài liệu', 'tim']
-    if any(keyword in prompt_lower for keyword in search_keywords):
-        # Extract search terms by removing common words
-        stop_words = {'tôi', 'cần', 'muốn', 'tìm', 'tim', 'file', 'có', 'nào', 'kiếm', 'tài', 'liệu', 'về', 'trong', 'search', 'ở', 'tại'}
-        words = [w for w in prompt.split() if w.lower() not in stop_words and len(w) > 1]
-        if words:
-            query = ' '.join(words[:5])  # Take first 5 meaningful words
-            return 'search', query, prompt
-    
-    return 'general', '', prompt
+     # Sử dụng intents để xác định intent bằng LLM
+    # Các intent có thể có
+    intents_text = """
+    - "search": Tìm kiếm file dựa trên nội dung hoặc tên
+    - "classify": Phân loại file theo nhóm
+    - "classify_by_topic": Phân loại file theo 1 chủ đề
+    - "scan": Quét thư mục và liệt kê file.
+    - "export": Xuất metadata file
+    - "general": Chức năng khác không liên quan đến các chức năng trên
+    """
+
+    # tạo fragement prompt để xác định intent bằng LLM
+    fragment_prompt = f"""
+    [INST]
+    Dưới đây là bảng các chức năng được hỗ trợ:
+    {intents_text}
+
+    Yêu cầu của người dùng: "{prompt}"
+
+    Hãy xác định câu trên thuộc chức năng nào.
+    Chỉ trả về duy nhất một trong các từ khóa sau: search, classify, classify_by_topic, scan, export, other.
+
+    Intent:
+    [/INST]
+    """
+
+    # tìm intent từ fragment prompt
+    intent = llm.create_chat_completion(
+        prompt=fragment_prompt,
+        max_tokens=30,
+        temperature=0.1,
+        top_p=0.1,
+        stop=["\n"],
+    )
+
+    # trả về intent
+    intent = intent["choices"][0]["text"].strip()
+    logger.info(f"Intent detected: {intent}")
+    return intent, prompt
 
 def clean_extracted_query(query: str) -> str:
     """Clean extracted search query"""
@@ -135,6 +121,100 @@ def clean_extracted_query(query: str) -> str:
         return result
     
     return query.strip()  # Return original if cleaning failed
+
+#===================== process_prompt =====================
+
+def process_prompt(prompt: str) -> str:
+
+    """Main prompt processing - preserve original context"""
+    
+    # Detect intent
+    intent, original_prompt = detect_intent(prompt)
+    
+    # Process with MCP if available and not general chat
+    if MCP_AVAILABLE and intent != 'general':
+        try:
+            # Call appropriate MCP function
+            if intent == 'search':
+                mcp_result = process_filesystem_query(query, "search")
+                logger.info(f"Search '{query}' returned: {mcp_result[:200]}...")
+            elif intent == 'scan':
+                mcp_result = process_filesystem_query("", "scan")
+                logger.info(f"Scan returned: {mcp_result[:200]}...")
+            elif intent == 'classify':
+                mcp_result = process_filesystem_query("", "classify")
+                logger.info(f"Classify returned: {mcp_result[:200]}...")
+            elif intent == 'export':
+                mcp_result = process_filesystem_query("", "export")
+                logger.info(f"Export returned: {mcp_result[:200]}...")
+            elif intent == 'classify_by_topic':
+                mcp_result = process_filesystem_query(query, "classify_by_topic")
+                logger.info(f"Classify by topic '{query}' returned: {mcp_result[:200]}...")
+            else:
+                return generate_simple_response(original_prompt)
+            
+            # Format result using patterns (no LLM) - pass original prompt
+            formatted_result = format_mcp_result(mcp_result, intent, query, original_prompt)
+            logger.info(f"Formatted result: {formatted_result[:100]}...")
+            return formatted_result
+                
+        except Exception as e:
+            logger.error(f"MCP error: {e}")
+            # Handle error with patterns (no LLM) - preserve context
+            return handle_error_with_pattern(str(e), intent, original_prompt)
+    else:    
+        # Only use LLM for general chat - use original prompt
+        return generate_simple_response(original_prompt)
+   
+
+def generate_simple_response(prompt: str) -> str:
+    """Generate simple LLM response - only for general chat"""
+    try:
+        response = llm.create_chat_completion(
+            messages=[
+                {"role": "system", "content": "Bạn là trợ lý AI. Phản hồi tin nhắn của user."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            temperature=0.7,
+            stop=["\n\n"]
+        )
+        
+        content = response["choices"][0]["message"]["content"].strip()
+        return content if content else "Xin lỗi, tôi không hiểu."
+        
+    except Exception as e:
+        logger.error(f"LLM error: {e}")
+        return f"Lỗi LLM: {str(e)}"
+
+def handle_error_with_pattern(error: str, intent: str, original_prompt: str = '') -> str:
+    """Handle errors using patterns - preserve context"""
+    
+    error_patterns = {
+        'file not found': 'Không tìm thấy file hoặc thư mục',
+        'permission denied': 'Không có quyền truy cập file',
+        'connection': 'Lỗi kết nối MCP',
+        'timeout': 'Hết thời gian chờ',
+        'invalid': 'Dữ liệu không hợp lệ'
+    }
+    
+    error_lower = error.lower()
+    for pattern, vietnamese_msg in error_patterns.items():
+        if pattern in error_lower:
+            if intent == 'search':
+                return f"Lỗi tìm kiếm: {vietnamese_msg}"
+            elif intent == 'scan':
+                return f"Lỗi quét thư mục: {vietnamese_msg}"
+            elif intent == 'classify':
+                return f"Lỗi phân loại: {vietnamese_msg}"
+            elif intent == 'export':
+                return f"Lỗi xuất file: {vietnamese_msg}"
+    
+    return f"Lỗi hệ thống: {error}"
+
+ 
+
+# ===================== format_mcp_result =====================
 
 def format_mcp_result(result: str, intent: str, query: str = '', original_prompt: str = '') -> str:
     """Format MCP result using patterns - improved detection"""
@@ -285,88 +365,66 @@ def clean_search_result(result: str, query: str) -> str:
     
     return '\n'.join(cleaned_lines)
 
-def generate_simple_response(prompt: str) -> str:
-    """Generate simple LLM response - only for general chat"""
-    try:
-        response = llm.create_chat_completion(
-            messages=[
-                {"role": "system", "content": "Bạn là trợ lý AI. Trả lời ngắn gọn."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=300,
-            temperature=0.7,
-            stop=["\n\n"]
-        )
-        
-        content = response["choices"][0]["message"]["content"].strip()
-        return content if content else "Xin lỗi, tôi không hiểu."
-        
-    except Exception as e:
-        logger.error(f"LLM error: {e}")
-        return f"Lỗi LLM: {str(e)}"
+# =============================================================
 
-def handle_error_with_pattern(error: str, intent: str, original_prompt: str = '') -> str:
-    """Handle errors using patterns - preserve context"""
-    
-    error_patterns = {
-        'file not found': 'Không tìm thấy file hoặc thư mục',
-        'permission denied': 'Không có quyền truy cập file',
-        'connection': 'Lỗi kết nối MCP',
-        'timeout': 'Hết thời gian chờ',
-        'invalid': 'Dữ liệu không hợp lệ'
-    }
-    
-    error_lower = error.lower()
-    for pattern, vietnamese_msg in error_patterns.items():
-        if pattern in error_lower:
-            if intent == 'search':
-                return f"Lỗi tìm kiếm: {vietnamese_msg}"
-            elif intent == 'scan':
-                return f"Lỗi quét thư mục: {vietnamese_msg}"
-            elif intent == 'classify':
-                return f"Lỗi phân loại: {vietnamese_msg}"
-            elif intent == 'export':
-                return f"Lỗi xuất file: {vietnamese_msg}"
-    
-    return f"Lỗi hệ thống: {error}"
+#===================== LLM_Handler ============================
+# handler tương ứng với intent, xử lý user_prompt tạo ra targets
+# Target là mục tiêu mà MCP cần tìm kiếm, xử lý, phân loại, export 
+# Target là từ khóa cần tìm kiếm trong tên file, content của file(search)
+# Target là danh mục nhóm cần phân loại. (classify)
+# Target là địa chỉ thư mục cần quét. Để trống nếu không có (scan)
+# Target là file cần xuất metadata. (export)
+# Target là từ khóa cần phân loại theo 1 chủ đề. (classify_by_topic)
 
-def process_prompt(prompt: str) -> str:
-    """Main prompt processing - preserve original context"""
-    
-    # Detect intent and extract data using patterns - get original prompt back
-    intent, query, original_prompt = detect_intent_and_extract(prompt)
-    
-    # Process with MCP if available and not general chat
-    if MCP_AVAILABLE and intent != 'general':
-        try:
-            # Call appropriate MCP function
-            if intent == 'search':
-                mcp_result = process_filesystem_query(query, "search")
-                logger.info(f"Search '{query}' returned: {mcp_result[:200]}...")
-            elif intent == 'scan':
-                mcp_result = process_filesystem_query("", "scan")
-                logger.info(f"Scan returned: {mcp_result[:200]}...")
-            elif intent == 'classify':
-                mcp_result = process_filesystem_query("", "classify")
-                logger.info(f"Classify returned: {mcp_result[:200]}...")
-            elif intent == 'export':
-                mcp_result = process_filesystem_query("", "export")
-                logger.info(f"Export returned: {mcp_result[:200]}...")
-            elif intent == 'classify_by_topic':
-                mcp_result = process_filesystem_query(query, "classify_by_topic")
-                logger.info(f"Classify by topic '{query}' returned: {mcp_result[:200]}...")
-            else:
-                return generate_simple_response(original_prompt)
-            
-            # Format result using patterns (no LLM) - pass original prompt
-            formatted_result = format_mcp_result(mcp_result, intent, query, original_prompt)
-            logger.info(f"Formatted result: {formatted_result[:100]}...")
-            return formatted_result
-                
-        except Exception as e:
-            logger.error(f"MCP error: {e}")
-            # Handle error with patterns (no LLM) - preserve context
-            return handle_error_with_pattern(str(e), intent, original_prompt)
-    
-    # Only use LLM for general chat - use original prompt
-    return generate_simple_response(original_prompt)
+
+def search_handler(prompt: str) -> str:
+    """Search handler"""
+    return prompt
+
+def classify_handler(prompt: str) -> str:
+    """Classify handler"""
+
+    fragment_prompt = f"""
+    [INST]
+    Từ yêu cầu sau đây, hãy trích xuất các nhóm phân loại (classification targets) và mô tả của từng nhóm.
+
+    Trả về kết quả dưới dạng JSON hợp lệ như sau:
+    {{
+        "classification_targets": {{
+            "Tên nhóm 1": "Mô tả nhóm 1",
+            "Tên nhóm 2": "Mô tả nhóm 2"
+            ...
+            "Tên nhóm n": "Mô tả nhóm n"
+        }}
+    }}
+
+    Yêu cầu người dùng:
+    "{prompt}"
+
+    Chỉ trả về JSON, không thêm lời giải thích.
+    [/INST]
+    """
+
+    response = llm.create_chat_completion(
+        messages=[{"role": "user", "content": fragment_prompt}],
+        temperature=0.2,
+        max_tokens=512,
+        stop=["</s>"]
+    )
+
+    targets = json.loads(response["choices"][0]["message"]["content"])["classification_targets"]
+    logger.info(f"Classification targets: {targets}")
+    return targets
+
+
+def scan_handler(prompt: str) -> str:       
+    """Scan handler"""
+    return prompt
+
+def export_handler(prompt: str) -> str:
+    """Export handler"""
+    return prompt
+
+def classify_by_topic_handler(prompt: str) -> str:
+    """Classify by topic handler"""
+    return prompt   

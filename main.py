@@ -32,7 +32,7 @@ def check_requirements():
     # Check llama-cpp-python
     try:
         import llama_cpp
-        logger.info("✓ llama-cpp-python available")
+        logger.info("llama-cpp-python available")
     except ImportError:
         print("ERROR: llama-cpp-python not installed")
         print("Run: pip install llama-cpp-python")
