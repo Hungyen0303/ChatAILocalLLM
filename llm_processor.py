@@ -136,25 +136,32 @@ def process_prompt(prompt: str) -> str:
         try:
             # Call appropriate MCP function
             if intent == 'search':
-                mcp_result = process_filesystem_query(query, "search")
-                logger.info(f"Search '{query}' returned: {mcp_result[:200]}...")
+                keyword = search_handler(original_prompt)
+                mcp_result = process_filesystem_query(keyword, "search")
+                logger.info(f"Search '{keyword}' returned: {mcp_result[:200]}...")
             elif intent == 'scan':
-                mcp_result = process_filesystem_query("", "scan")
+                #######activate this when upgrate to external path implementation
+                # directory = scan_handler(original_prompt)
+                directory = ""
+                mcp_result = process_filesystem_query(directory, "scan")
                 logger.info(f"Scan returned: {mcp_result[:200]}...")
             elif intent == 'classify':
-                mcp_result = process_filesystem_query("", "classify")
+                targets = classify_handler(original_prompt)
+                mcp_files = process_filesystem_query("", "scan_all")
+                mcp_result = generate_classify_result(mcp_files,targets)
                 logger.info(f"Classify returned: {mcp_result[:200]}...")
             elif intent == 'export':
                 mcp_result = process_filesystem_query("", "export")
                 logger.info(f"Export returned: {mcp_result[:200]}...")
             elif intent == 'classify_by_topic':
-                mcp_result = process_filesystem_query(query, "classify_by_topic")
-                logger.info(f"Classify by topic '{query}' returned: {mcp_result[:200]}...")
+                topic = classify_by_topic_handler(original_prompt)
+                mcp_result = process_filesystem_query(topic, "classify_by_topic")
+                logger.info(f"Classify by topic '{topic}' returned: {mcp_result[:200]}...")
             else:
                 return generate_simple_response(original_prompt)
             
             # Format result using patterns (no LLM) - pass original prompt
-            formatted_result = format_mcp_result(mcp_result, intent, query, original_prompt)
+            formatted_result = format_mcp_result(mcp_result, intent, original_prompt)
             logger.info(f"Formatted result: {formatted_result[:100]}...")
             return formatted_result
                 
@@ -379,7 +386,27 @@ def clean_search_result(result: str, query: str) -> str:
 
 def search_handler(prompt: str) -> str:
     """Search handler"""
-    return prompt
+
+    fragment_prompt = f"""
+    [INST]
+    Từ yêu cầu sau đây, hãy trích xuất **chính xác 1 từ khóa duy nhất** cần tìm kiếm trong file.
+
+    Chỉ trả về duy nhất từ khóa đó (không cần JSON, không giải thích).
+
+    Yêu cầu người dùng:
+    "{prompt}"
+    [/INST]
+    """
+
+    response = llm.create_chat_completion(
+        messages=[{"role": "user", "content": fragment_prompt}],
+        temperature=0.2,
+        max_tokens=512,
+        stop=["</s>"]
+    )
+    keyword = response["choices"][0]["message"]["content"].strip()
+    logger.info(f"Search keyword: {keyword}")
+    return keyword
 
 def classify_handler(prompt: str) -> str:
     """Classify handler"""
@@ -416,10 +443,77 @@ def classify_handler(prompt: str) -> str:
     logger.info(f"Classification targets: {targets}")
     return targets
 
+def generate_classify_result(mcp_files: list, classification_targets: dict) -> dict:
+    """Generate classify result using LLM"""
+    file_info = [
+        {
+            "filename": f["filename"],
+            "preview": f["content_preview"][:200] + "..." if len(f["content_preview"]) > 200 else f["content_preview"]
+        }
+        for f in mcp_files
+    ]
+
+    # Bước 2: Tạo prompt lấy kết quả
+    fragment_prompt = f"""
+        [INST]
+        Dưới đây là các nhóm phân loại với mô tả chi tiết:
+        {json.dumps(classification_targets, ensure_ascii=False, indent=2)}
+
+        Và danh sách các file cần phân loại:
+        {json.dumps(file_info, ensure_ascii=False, indent=2)}
+
+        Hãy phân loại từng file vào **một nhóm phù hợp nhất**, dựa trên tên và nội dung xem trước (preview).
+        Đưa kết quả vào vị trí tương ứng danh sách kết quả.
+        Trả về kết quả dạng JSON hợp lệ:
+        {{
+            "classification_result": ["Tên nhóm", ..., "Tên nhóm"]
+        }}
+        Chỉ trả về JSON, không thêm lời giải thích.
+
+        [/INST]
+        """
+
+    # Bước 3: Gửi prompt đến LLM
+    response = llm.create_chat_completion(
+        messages=[{"role": "user", "content": fragment_prompt}],
+        temperature=0.2,
+        max_tokens=1024,
+        stop=["</s>"]
+    )
+
+    # Bước 4: Parse kết quả và gắn nhãn
+    result = json.loads(response["choices"][0]["message"]["content"])
+    group_labels = result["classification_result"]
+
+    if len(group_labels) != len(mcp_files):
+        raise ValueError("Số lượng nhóm trả về không khớp với số file.")
+
+    for idx, label in enumerate(group_labels):
+        mcp_files[idx]["label"] = label
+
+    return mcp_files
+
 
 def scan_handler(prompt: str) -> str:       
     """Scan handler"""
-    return prompt
+    Basepath = ""
+    fragment_prompt = f"""
+    [INST]
+    Từ yêu cầu sau đây, hãy trích xuất đường dẫn thư mục cần quét.
+    Yêu cầu người dùng:
+    "{prompt}"
+    Nếu không có đường dẫn thư mục cần quét, trả về ""
+    [/INST]
+    """
+    response = llm.create_chat_completion(
+        messages=[{"role": "user", "content": fragment_prompt}],
+        temperature=0.2,
+        max_tokens=512,
+        stop=["</s>"]
+    )
+    directory = response["choices"][0]["message"]["content"].strip()
+    logger.info(f"Scan directory: {directory}")
+    return directory
 
 def export_handler(prompt: str) -> str:
     """Export handler"""
@@ -427,4 +521,19 @@ def export_handler(prompt: str) -> str:
 
 def classify_by_topic_handler(prompt: str) -> str:
     """Classify by topic handler"""
-    return prompt   
+    fragment_prompt = f"""
+    [INST]
+    Từ yêu cầu sau đây, hãy trích xuất **chính xác 1 từ khóa duy nhất của 1 chủ đề** cần phân loại.
+    Yêu cầu người dùng:
+    "{prompt}"
+    [/INST]
+    """
+    response = llm.create_chat_completion(
+        messages=[{"role": "user", "content": fragment_prompt}],
+        temperature=0.2,
+        max_tokens=512,
+        stop=["</s>"]
+    )
+    topic = response["choices"][0]["message"]["content"].strip()
+    logger.info(f"Classify by topic: {topic}")
+    return topic

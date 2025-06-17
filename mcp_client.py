@@ -168,51 +168,6 @@ class FilesystemManager:
                 "files": []
             }
     
-    def classify_files(self, category: str = "") -> Dict:
-        """Lấy file theo nhóm phân loại"""
-        try:
-            from mcp_filesystem_server import file_indexer
-            
-            if category:
-                results = file_indexer.get_files_by_category(category)
-            else:
-                # Lấy tất cả file và nhóm theo category
-                all_files = list(file_indexer.file_index.values())
-                results = all_files
-            
-            # Nhóm file theo label
-            categories = {}
-            for f in results:
-                label = f.label
-                if label not in categories:
-                    categories[label] = []
-                categories[label].append({
-                    "filename": f.filename,
-                    "filepath": f.filepath,
-                    "size": f.size,
-                    "type": f.file_type
-                })
-            
-            result = {
-                "success": True,
-                "category_filter": category,
-                "total_files": len(results),
-                "categories": categories,
-                "category_count": len(categories)
-            }
-            
-            logger.info(f"Classification complete: {len(results)} files in {len(categories)} categories")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Lỗi phân loại: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "categories": {},
-                "total_files": 0
-            }
-    
     def export_metadata(self) -> Dict:
         """Xuất metadata để gửi MCP Cloud"""
         try:
@@ -321,6 +276,9 @@ class FilesystemManager:
                 "files": []
             }
 
+
+
+
 # Instance global để sử dụng trong ứng dụng
 filesystem_manager = FilesystemManager()
 
@@ -331,7 +289,7 @@ def process_filesystem_query(query: str, query_type: str = "search") -> str:
     
     Args:
         query: Nội dung query của user
-        query_type: Loại query (search, scan, classify, export)
+        query_type: Loại query (search, scan, export)
     
     Returns:
         str: Kết quả dưới dạng text để hiển thị cho user
@@ -365,22 +323,19 @@ def process_filesystem_query(query: str, query_type: str = "search") -> str:
                 return f"Đã quét và index {result['total']} file:\n\n{category_text}\n\nTất cả file đã được phân loại và sẵn sàng tìm kiếm."
             else:
                 return f"Lỗi quét file: {result['error']}"
-        
-        elif query_type == "classify":
-            result = filesystem_manager.classify_files()
+            
+        elif query_type == "scan_all":
+            result = filesystem_manager.scan_files()
             if result["success"]:
-                category_text = ""
-                for label, files in result["categories"].items():
-                    category_text += f"\n{label}: {len(files)} file\n"
-                    for f in files[:3]:  # Hiển thị tối đa 3 file mỗi nhóm
-                        category_text += f"  • {f['filename']}\n"
-                    if len(files) > 3:
-                        category_text += f"  • ... và {len(files) - 3} file khác\n"
-                
-                return f"Phân loại {result['total_files']} file thành {result['category_count']} nhóm:{category_text}"
+                # categories = {}
+                # for f in result["files"]:
+                #     label = f["label"]
+                #     if label not in categories:
+                #         categories[label] = 0
+                #     categories[label] += 1
+                return result["files"]
             else:
-                return f"Lỗi phân loại: {result['error']}"
-        
+                return f"Lỗi quét file: {result['error']}"
         elif query_type == "export":
             result = filesystem_manager.export_metadata()
             if result["success"]:

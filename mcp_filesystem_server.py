@@ -117,32 +117,6 @@ class FileIndexer:
         else:
             return ""
     
-    def classify_file(self, content: str, filename: str, categories: Dict[str, List[str]] = None) -> str:
-        """Phân loại file dựa trên nội dung và tên file
-        
-        Args:
-            content: Nội dung file
-            filename: Tên file
-            categories: Dictionary chứa các nhóm và từ khóa tương ứng. 
-                       Format: {"Tên nhóm": ["từ khóa 1", "từ khóa 2", ...]}
-        """
-        content_lower = content.lower()
-        filename_lower = filename.lower()
-        
-        # Sử dụng categories được truyền vào hoặc thông báo lỗi nếu không có categories
-        if categories is None:
-            raise ValueError("Categories dictionary is required for classification")
-            
-        categories_to_check = categories
-        
-        # Kiểm tra từng nhóm
-        for group_name, keywords in categories_to_check.items():
-            if any(keyword in content_lower or keyword in filename_lower 
-                   for keyword in keywords):
-                return f"Nhóm {group_name}"
-        
-        # Nếu không khớp với nhóm nào
-        return "Nhóm Khác"
     
     def scan_directory(self, directory: Path = None) -> List[FileMetadata]:
         """Quét thư mục và tạo index file"""
@@ -157,7 +131,7 @@ class FileIndexer:
                     # Lấy thông tin file
                     stat = filepath.stat()
                     content = self.extract_content(filepath)
-                    label = self.classify_file(content, filepath.name)
+                    label = "Chưa phân loại"
                     
                     # Tạo metadata
                     metadata = FileMetadata(
@@ -192,7 +166,6 @@ class FileIndexer:
             if (query_lower in metadata.filename.lower() or 
                 query_lower in metadata.content_preview.lower()):
                 results.append(metadata)
-        
         return results
     
     def get_files_by_category(self, category: str) -> List[FileMetadata]:
@@ -321,19 +294,6 @@ async def handle_list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
-            name="classify_files",
-            description="Phân loại file theo nhóm",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "category": {
-                        "type": "string",
-                        "description": "Nhóm phân loại (A, B, C, D, E hoặc từ khóa)"
-                    }
-                }
-            },
-        ),
-        types.Tool(
             name="export_metadata",
             description="Xuất metadata để gửi qua MCP Cloud",
             inputSchema={
@@ -378,6 +338,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                         "filename": f.filename,
                         "label": f.label,
                         "size": f.size,
+                        "content_preview": f.content_preview[:200] + "..." if len(f.content_preview) > 200 else f.content_preview,
                         "type": f.file_type
                     } for f in files
                 ]
@@ -416,25 +377,6 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 return [types.TextContent(type="text", text=f"Không tìm thấy file: {filepath}")]
         except Exception as e:
             return [types.TextContent(type="text", text=f"Lỗi lấy thông tin file: {e}")]
-    
-    elif name == "classify_files":
-        category = arguments.get("category", "")
-        try:
-            results = file_indexer.get_files_by_category(category)
-            result = {
-                "category": category,
-                "count": len(results),
-                "files": [
-                    {
-                        "filename": f.filename,
-                        "label": f.label,
-                        "filepath": f.filepath
-                    } for f in results
-                ]
-            }
-            return [types.TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
-        except Exception as e:
-            return [types.TextContent(type="text", text=f"Lỗi phân loại: {e}")]
     
     elif name == "export_metadata":
         format_type = arguments.get("format", "json")
