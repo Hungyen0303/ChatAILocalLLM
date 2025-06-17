@@ -91,7 +91,7 @@ def detect_intent(prompt: str) -> tuple:
     )
 
     # trả về intent
-    intent = intent["choices"][0]["text"].strip()
+    intent = intent["choices"][0]["message"]["content"].strip()
     logger.info(f"Intent detected: {intent}")
     return intent, prompt
 
