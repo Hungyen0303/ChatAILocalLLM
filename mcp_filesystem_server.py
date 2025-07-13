@@ -144,8 +144,6 @@ class FileIndexer:
                         created_time=stat.st_ctime,
                         modified_time=stat.st_mtime
                     )
-                    
-                    # Lưu vào index
                     self.file_index[str(filepath.absolute())] = metadata
                     files_found.append(metadata)
                     

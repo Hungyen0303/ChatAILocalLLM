@@ -6,6 +6,7 @@ import logging
 
 # Import cấu hình đơn giản
 from config import MODEL_DIR, MODEL_FILENAME, get_model_path
+from helper import extract_json_from_text
 
 # Import MCP filesystem client
 try:
@@ -288,20 +289,25 @@ def format_mcp_result(result: str, intent: str, query: str = '', original_prompt
                                        else 0 for match in matches)
                     break
             
-            return f"Quét thư mục hoàn thành\nTổng số file: {file_count}\n\n{result}"
+            return f"Quét thư mục hoàn thành\n\n{result}"
         else:
             return f"Lỗi quét thư mục: {result}"
     
     elif intent == 'classify':
         # Check for classification data
-        has_classification = any(indicator in result for indicator in [
-            'Nhóm', 'Categories', 'phân loại', 'file', '•'
-        ])
-        
-        if has_classification:
-            return f"Phân loại file thành công:\n\n{result}"
-        else:
-            return f"Lỗi phân loại: {result}"
+        # has_classification = any(indicator in result for indicator in [
+        #     'Nhóm', 'Categories', 'phân loại', 'file', '•'
+        # ])
+        final_result = 'Phân loại file thành công\n\n'
+    
+        for i in range(len(result)):
+            final_result += f"{i+1}. {result[i]['filename']} - Nhóm: {result[i]['label']}\n"
+        return final_result
+        # if has_classification:
+        #     print(f"Phân loại file thành công")
+        #    
+        # else:
+        #     return f"Lỗi phân loại: {result}"
     
     elif intent == 'export':
         # Check if export was successful and has detailed data
@@ -461,7 +467,7 @@ def classify_handler(prompt: str) -> str:
     )
 
     targets = json.loads(response["choices"][0]["message"]["content"])["classification_targets"]
-    logger.info(f"Classification targets: {targets}")
+    print(f"Classification targets: {targets}")
     return targets
 
 def generate_classify_result(mcp_files: list, classification_targets: dict) -> dict:
@@ -477,9 +483,7 @@ def generate_classify_result(mcp_files: list, classification_targets: dict) -> d
     # Bước 2: Tạo prompt lấy kết quả
     fragment_prompt = f"""
         [INST]
-        Dưới đây là các nhóm phân loại với mô tả chi tiết:
-        {json.dumps(classification_targets, ensure_ascii=False, indent=2)}
-
+        
         Và danh sách các file cần phân loại:
         {json.dumps(file_info, ensure_ascii=False, indent=2)}
 
@@ -489,8 +493,9 @@ def generate_classify_result(mcp_files: list, classification_targets: dict) -> d
         {{
             "classification_result": ["Tên nhóm", ..., "Tên nhóm"]
         }}
+        Với classification_result sẽ có đúng {len(mcp_files)} , không được nhiều hơn hoặc ít hơn.
         Chỉ trả về JSON, không thêm lời giải thích.
-
+        Tên nhóm phải thuộc các chủ đề phổ biến như: finance, environment, programming, sales strategy, education, technology, health, v.v.
         [/INST]
         """
 
@@ -501,16 +506,18 @@ def generate_classify_result(mcp_files: list, classification_targets: dict) -> d
         max_tokens=1024,
         stop=["</s>"]
     )
-
     # Bước 4: Parse kết quả và gắn nhãn
-    result = json.loads(response["choices"][0]["message"]["content"])
+    raw_output = response["choices"][0]["message"]["content"]
+    data = extract_json_from_text(raw_output)
+    result = json.loads(data)
+    print(f"Classification result: {result}")
     group_labels = result["classification_result"]
 
-    if len(group_labels) != len(mcp_files):
-        raise ValueError("Số lượng nhóm trả về không khớp với số file.")
+    # if len(group_labels) != len(mcp_files):
+    #     raise ValueError("Số lượng nhóm trả về không khớp với số file.")
 
-    for idx, label in enumerate(group_labels):
-        mcp_files[idx]["label"] = label
+    for i in range(len(mcp_files)):
+        mcp_files[i]["label"] = group_labels[i]
 
     return mcp_files
 

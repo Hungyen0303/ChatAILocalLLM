@@ -119,6 +119,7 @@ class FilesystemManager:
                 "total": len(files)
             }
             
+            
             logger.info(f"Filesystem scan complete: {len(files)} files indexed")
             return result
             

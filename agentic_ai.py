@@ -93,7 +93,6 @@ class AgenticProcessor:
                 success=False,
                 error=f"Scan failed: {str(e)}"
             )
-    
     def _execute_classify(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
         """Thực hiện classify với xử lý lỗi"""
         try:
@@ -110,11 +109,8 @@ class AgenticProcessor:
                     error="Không tìm thấy files để phân loại",
                     missing_data=["file_list"]
                 )
-            
             mcp_result = generate_classify_result(mcp_files, targets)
             formatted_result = format_mcp_result(mcp_result, 'classify', prompt)
-            
-            # Lưu kết quả vào context
             self.context_data['classify_results'] = mcp_result
             
             return FunctionResult(

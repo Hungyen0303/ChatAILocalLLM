@@ -3,6 +3,7 @@ import re
 from typing import Dict
 
 from attr import dataclass
+from helper import extract_json_from_text
 from llm_processor import llm
 from llama_cpp import Any, List, Optional
 
@@ -93,23 +94,7 @@ Yêu cầu: So sánh file marketing 2024 và 2025
 **JSON Output**:
 [/INST]
 """
-def extract_json_from_text(text: str) -> Optional[str]:
-    json_pattern = r'\{[\s\S]*\}'
-    match = re.search(json_pattern, text, re.DOTALL)
-    
-    if not match:
-        return None
-    
-    json_str = match.group(0)
-    json_str = json_str.strip()
-    if json_str.startswith("```json"):
-        json_str = json_str[7:].rstrip("```").strip()
-    
-    try:
-        json.loads(json_str)
-        return json_str
-    except json.JSONDecodeError:
-        return None
+
 def get_json_response(user_input: str, max_retries: int = 3) -> Optional[ActionPlan]:
     prompt = get_prompt(user_input)
     
