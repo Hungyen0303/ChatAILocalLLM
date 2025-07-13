@@ -8,7 +8,7 @@ import os
 
 # Model Q3
 MODEL_REPO_ID = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
-MODEL_FILENAME = "Meta-Llama-3-8B-Instruct.Q3_K_M.gguf"
+MODEL_FILENAME = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"
 MODEL_DIR = "../models"
 
 def get_model_path():
@@ -19,7 +19,7 @@ def get_model_path():
 # CẤU HÌNH FILESYSTEM - Cần thiết cho MCP
 # =============================================================================
 
-SUPPORTED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.pptx', '.ppt', '.txt']
+SUPPORTED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.pptx', '.ppt', '.txt' , 'xlsx' , 'xls']
 CONTENT_PREVIEW_LIMIT = 1000
 
 # Từ khóa phân loại

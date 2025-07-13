@@ -29,7 +29,7 @@ if not os.path.exists(MODEL_PATH):
 try:
     llm = Llama(
         model_path=MODEL_PATH,
-        n_ctx=2048,
+        n_ctx=8192,
         n_threads=8,
         n_batch=128,
         use_mlock=True,
@@ -54,46 +54,73 @@ if MCP_AVAILABLE:
 #===================== detect_intent =====================
 
 def detect_intent(prompt: str) -> tuple:
-    """Detect intent"""
-    
-     # Sử dụng intents để xác định intent bằng LLM
-    # Các intent có thể có
+    """Detect user intent from prompt and return a list of actions"""
+
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Các hành động được hỗ trợ
     intents_text = """
-    - "search": Tìm kiếm file dựa trên nội dung hoặc tên
-    - "classify": Phân loại file theo nhóm
-    - "classify_by_topic": Phân loại file theo 1 chủ đề
-    - "scan": Quét thư mục và liệt kê file.
-    - "export": Xuất metadata file
-    - "general": Chức năng khác không liên quan đến các chức năng trên
-    """
+- "search": Tìm kiếm file dựa trên nội dung hoặc tên
+- "classify": Phân loại file theo nhóm
+- "classify_by_topic": Phân loại file theo 1 chủ đề cụ thể
+- "scan": Quét thư mục và liệt kê các file
+- "export": Xuất metadata của các file
+- "general": Các yêu cầu khác không thuộc các loại trên
+"""
 
-    # tạo fragement prompt để xác định intent bằng LLM
-    fragment_prompt = f"""
-    [INST]
-    Dưới đây là bảng các chức năng được hỗ trợ:
-    {intents_text}
+    # Prompt tối ưu dành cho LLM
+    system_prompt = f"""
+Bạn là một AI chuyên xác định hành động từ câu yêu cầu của người dùng.
 
-    Yêu cầu của người dùng: "{prompt}"
+Dưới đây là các hành động được hỗ trợ:
+{intents_text}
 
-    Hãy xác định câu trên thuộc chức năng nào.
-    Chỉ trả về duy nhất một trong các từ khóa sau: search, classify, classify_by_topic, scan, export, other.
+Nhiệm vụ của bạn:
+- Phân tích yêu cầu người dùng và trích xuất các hành động (intent) theo đúng thứ tự xuất hiện.
+- Chỉ sử dụng các hành động sau: "search", "classify", "classify_by_topic", "scan", "export", "general"
+- Trả về duy nhất một mảng JSON hợp lệ như: ["search", "classify"]
+- Không được viết thêm giải thích, tiêu đề hoặc chữ nào khác.
 
-    Intent:
-    [/INST]
-    """
+Ví dụ:
+Người dùng: Tôi muốn search và classify tiếp theo lại search
+Output: ["search", "classify", "search"]
 
-    # tìm intent từ fragment prompt
-    intent = llm.create_chat_completion(
-        messages=[{"role": "user", "content": fragment_prompt}],
+Người dùng: Hãy quét thư mục, sau đó phân loại theo chủ đề
+Output: ["scan", "classify_by_topic"]
+
+Người dùng: Xuất thông tin file
+Output: ["export"]
+
+Người dùng: Tôi muốn thực hiện một tác vụ khác
+Output: ["general"]
+
+Lưu ý : Nếu có ít nhất một hành động là "search", "classify", "classify_by_topic", "scan", "export" thì không được trả về "general" nữa.
+Người dùng: {prompt}
+Output:
+""".strip()
+
+    # Gọi LLM (giả định bạn đang dùng self.llm hoặc global llm đã có)
+    response = llm.create_chat_completion(
+        messages=[{"role": "user", "content": system_prompt}],
         temperature=0.1,
-        max_tokens=30,
-        stop=["\n"],
+        max_tokens=150
     )
 
-    # trả về intent
-    intent = intent["choices"][0]["message"]["content"].strip()
-    logger.info(f"Intent detected: {intent}")
-    return intent, prompt
+    # Trích xuất và kiểm tra kết quả
+    content = response["choices"][0]["message"]["content"].strip()
+    logger.info(f"Intent raw LLM output: {content}")
+
+    try:
+        actions = json.loads(content)
+        if not isinstance(actions, list):
+            raise ValueError("Expected a list of actions")
+    except Exception as e:
+        logger.warning(f"Failed to parse actions: {e}")
+        actions = []
+    return actions, prompt
+
 
 def clean_extracted_query(query: str) -> str:
     """Clean extracted search query"""
@@ -126,14 +153,10 @@ def clean_extracted_query(query: str) -> str:
 def process_prompt(prompt: str) -> str:
 
     """Main prompt processing - preserve original context"""
-    
-    # Detect intent
     intent, original_prompt = detect_intent(prompt)
-    
-    # Process with MCP if available and not general chat
-    if MCP_AVAILABLE and intent != 'general':
+
+    if MCP_AVAILABLE and intent[0] != 'general':
         try:
-            # Call appropriate MCP function
             if intent == 'search':
                 keyword = search_handler(original_prompt)
                 mcp_result = process_filesystem_query(keyword, "search")
@@ -171,7 +194,6 @@ def process_prompt(prompt: str) -> str:
     else:    
         # Only use LLM for general chat - use original prompt
         return generate_simple_response(original_prompt)
-   
 
 def generate_simple_response(prompt: str) -> str:
     """Generate simple LLM response - only for general chat"""
@@ -183,7 +205,7 @@ def generate_simple_response(prompt: str) -> str:
             ],
             max_tokens=300,
             temperature=0.7,
-            stop=["\n\n"]
+            # stop=["\n\n"]
         )
         
         content = response["choices"][0]["message"]["content"].strip()
@@ -227,7 +249,7 @@ def format_mcp_result(result: str, intent: str, query: str = '', original_prompt
     
     if intent == 'search':
         if 'Không tìm thấy' in result or 'No files found' in result or not result.strip():
-            return f"Không tìm thấy file nào với từ khóa '{query}'"
+            return f"Không tìm thấy file nào với yêu cầu '{query}'"
         
         # Clean and process the result for better presentation
         cleaned_result = clean_search_result(result, query)
@@ -236,11 +258,11 @@ def format_mcp_result(result: str, intent: str, query: str = '', original_prompt
         file_count = count_files_in_text(cleaned_result)
         
         if file_count == 0:
-            return f"Không có kết quả tìm kiếm cho '{query}'\n\nDữ liệu trả về:\n{result}"
+            return f"Không có kết quả tìm kiếm với yêu cầu '{query}'\n\nDữ liệu trả về:\n{result}"
         elif file_count == 1:
-            return f"Tìm thấy 1 file với từ khóa '{query}':\n\n{cleaned_result}"
+            return f"Tìm thấy 1 file với yêu cầu '{query}':\n\n{cleaned_result}"
         else:
-            return f"Tìm thấy {file_count} file với từ khóa '{query}':\n\n{cleaned_result}"
+            return f"Tìm thấy {file_count} file với yêu cầu '{query}':\n\n{cleaned_result}"
     
     elif intent == 'scan':
         # Check for successful scan - look for actual data instead of "success" word
@@ -404,7 +426,7 @@ def search_handler(prompt: str) -> str:
         stop=["</s>"]
     )
     keyword = response["choices"][0]["message"]["content"].strip()
-    logger.info(f"Search keyword: {keyword}")
+    print(f"Search keyword: {keyword}")
     return keyword
 
 def classify_handler(prompt: str) -> str:
@@ -522,17 +544,39 @@ def classify_by_topic_handler(prompt: str) -> str:
     """Classify by topic handler"""
     fragment_prompt = f"""
     [INST]
-    Từ yêu cầu sau đây, hãy trích xuất **chính xác 1 từ khóa duy nhất của 1 chủ đề** cần phân loại.
+    Bạn là một AI phân loại nội dung theo chủ đề.
+
+    Nhiệm vụ:
+    - Phân tích câu yêu cầu của người dùng.
+    - Trích xuất **duy nhất một từ khóa chủ đề chính**, không được ghi thêm chữ nào khác.
+    - Chỉ trả về một từ hoặc cụm từ thể hiện chủ đề rõ ràng, ví dụ: finance, environment, programming, sales strategy, education, technology, health, v.v.
+    - Không thêm dấu chấm, dấu ngoặc kép hoặc giải thích.
+
+    Ví dụ:
+    Yêu cầu: Tôi cần phân loại các tài liệu về tài chính công ty.
+    → Output: finance
+
+    Yêu cầu: Phân tích các chiến lược bán hàng.
+    → Output: sales strategy
+
+    Yêu cầu: Tổng hợp các bài giảng về lập trình Python.
+    → Output: programming
+
     Yêu cầu người dùng:
     "{prompt}"
+
+    → Output:
     [/INST]
     """
+
     response = llm.create_chat_completion(
         messages=[{"role": "user", "content": fragment_prompt}],
         temperature=0.2,
-        max_tokens=512,
-        stop=["</s>"]
+        max_tokens=20,
+        stop=["\n", "</s>"]
     )
+
     topic = response["choices"][0]["message"]["content"].strip()
+    print(f"Classify by topic: {topic}")
     logger.info(f"Classify by topic: {topic}")
     return topic

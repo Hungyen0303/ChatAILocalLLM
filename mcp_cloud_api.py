@@ -12,7 +12,7 @@ class Metadata(BaseModel):
 
 
 class MCPMetadataService:
-    def __init__(self, store_dir: str = "metadata_store", filename: str = "metadata.jsonl"):
+    def __init__(self, store_dir: str = "metadata_store", filename: str = "metadata.json"):
         self.store_dir = Path(store_dir)
         self.store_path = Path(store_dir) / filename
         self.store_dir.mkdir(parents=True, exist_ok=True)

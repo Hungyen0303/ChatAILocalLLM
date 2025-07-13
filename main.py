@@ -73,7 +73,7 @@ def main():
     print("  - LLM Model: Loaded")
     print("  - MCP Filesystem: Active")
     print("  - Web Interface: Starting...")
-    print("\nAccess the system at: http://localhost:7860")
+    print("\nAccess the system at: http://localhost:7860/?__theme=light")
     print("=" * 80)
     
     try:

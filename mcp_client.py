@@ -3,8 +3,7 @@
 MCP Client
 Kết nối với MCP Filesystem Server từ ứng dụng Chat AI
 """
-
-import asyncio
+import requests
 import json
 import subprocess
 import sys
@@ -174,27 +173,31 @@ class FilesystemManager:
             from mcp_filesystem_server import file_indexer
             
             files = list(file_indexer.file_index.values())
-            
-            # Định dạng metadata cho MCP Cloud
-            metadata_for_cloud = []
+            url = "http://localhost:8000/upload-metadata"
+
             for f in files:
-                metadata_for_cloud.append({
+                data = {
                     "filename": f.filename,
                     "label": f.label,
-                    "content_preview": f.content_preview[:CONTENT_PREVIEW_LIMIT], 
-                    "file_type": f.file_type,
-                    "size": f.size,
-                    "filepath": f.filepath.replace("\\", "/")  # Chuẩn hóa đường dẫn
-                })
+                    "content": getattr(f, "content", ""),
+                    "timestamp": getattr(f, "timestamp", None),
+                }
+
+                try:
+                    print(f"Đang gửi metadata cho file: {f.filename}")
+                    response = requests.post(url, json=data)
+                    response.raise_for_status()
+                    print(f"✅ Gửi thành công metadata cho file: {f.filename}")
+                except requests.exceptions.RequestException as e:
+                    print(f"❌ Gửi metadata thất bại cho file: {f.filename} — {e}")
+
             
             result = {
                 "success": True,
-                "total_files": len(metadata_for_cloud),
-                "metadata": metadata_for_cloud,
-                "export_time": "2024-01-01T00:00:00Z"  # Có thể thêm timestamp thực
+                "total_files": len(files),
             }
             
-            logger.info(f"Metadata export complete: {len(metadata_for_cloud)} files")
+            logger.info(f"Metadata export complete: {len(files)} files")
             return result
             
         except Exception as e:
@@ -249,8 +252,7 @@ class FilesystemManager:
             from mcp_filesystem_server import file_indexer
             # Gán label
             file_indexer.classify_files_by_topic(topic)
-            # Gom nhóm
-            results = file_indexer.get_files_by_category(f"Liên quan: {topic}")
+            results = file_indexer.get_files_by_category(f"{topic}")
             files = [
                 {
                     "filename": f.filename,

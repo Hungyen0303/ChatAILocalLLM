@@ -17,6 +17,7 @@ def ask_llm_yesno(file_content: str, topic: str) -> bool:
             stop=["\n"]
         )
         answer = response["choices"][0]["message"]["content"].strip().lower()
+        print(f"LLM trả lời: {answer}")  # Debug LLM response
         return answer.startswith("có")
     except Exception as e:
         logger.error(f"Lỗi LLM khi phân loại file: {e}")

@@ -1,6 +1,7 @@
 import gradio as gr
 import os
 import logging
+from agentic_ai import process_prompt_agent
 from llm_processor import process_prompt
 
 logger = logging.getLogger(__name__)
@@ -9,10 +10,10 @@ def chat_with_llm(message, history):
     """Simple chat interface with LLM"""
     try:
         # Process with simplified LLM processor
-        response = process_prompt(message)
+        history.append({"role": "user", "content": message})
+        response = process_prompt_agent(message)
         
         # Add to history using messages format
-        history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": response})
         
         return history, ""

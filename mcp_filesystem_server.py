@@ -207,8 +207,8 @@ class FileIndexer:
             if not full_content.strip():
                 continue
             if ask_llm_yesno(full_content, topic):
-                metadata.label = f"Liên quan: {topic}"
-
+                metadata.label = f"{topic}"
+        
 # Khởi tạo file indexer
 file_indexer = FileIndexer()
 
