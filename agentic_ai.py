@@ -21,6 +21,8 @@ class AgenticProcessor:
         try:            
             if intent == 'search':
                 return self._execute_search(prompt, step)
+            elif intent == 'search_exactly':
+                return self._execute_search_and_read(prompt, step)
             elif intent == 'scan':
                 return self._execute_scan(prompt, step)
             elif intent == 'classify':
@@ -29,17 +31,33 @@ class AgenticProcessor:
                 return self._execute_export(prompt, step)
             elif intent == 'classify_by_topic':
                 return self._execute_classify_by_topic(prompt, step)
+            elif intent == 'general':
+                print(f"Thực hiện tác vụ chung: {step_description}")
+                data_context = ''
+                for i in range(len(self.execution_history)):
+                        output = self.execution_history[i].get('output', '')
+                        data_context += f"Bước {i+1}: {output}\n"
+                generate_info = generate_simple_response(f"Với prompt {prompt} Hãy thực hiện tác vụ này :{step_description} 'với data hiện có là '  {data_context}. prompt không liên quan tới data hiện có. Chỉ trả về kết quả của tác vụ này.")
+                return FunctionResult(
+                    success=True,
+                    data= step_description + generate_info
+                ) 
+
             else:
                 return FunctionResult(
                     success=False,
-                    error=f"Hành động: {intent}"
+                    error=f"Hành động: {step_description}"
                 )
                 
         except Exception as e:
             print(f"Error executing step {step_index + 1}: {e}")
+            # Make a recommentation based on the error
+            recommendation = generate_simple_response(
+                f"Với prompt hiện tại là '{prompt}', hãy gợi ý một hành động thay thế hoặc giải pháp cho lỗi: {str(e)}"
+            )
             return FunctionResult(
                 success=False,
-                error=str(e)
+                error=str(e) + f"\nGợi ý: {recommendation}",
             )
     
     def _execute_search(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
@@ -56,8 +74,6 @@ class AgenticProcessor:
             
             mcp_result = process_filesystem_query(keyword, "search")
             formatted_result = format_mcp_result(mcp_result, 'search', prompt)
-            
-            # Lưu kết quả vào context
             self.context_data['search_results'] = mcp_result
             self.context_data['search_keyword'] = keyword
             
@@ -71,7 +87,26 @@ class AgenticProcessor:
                 success=False,
                 error=f"Search failed: {str(e)}"
             )
-    
+    def _execute_search_and_read(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
+        """Thực hiện scan với xử lý lỗi"""
+        try:
+            # Có thể sử dụng dữ liệu từ bước trước
+            directory = self.context_data.get('target_directory', "")
+            mcp_result = process_filesystem_query(directory, "scan")
+            file_content = process_filesystem_query(directory, "read_file")            
+            # Lưu kết quả vào context
+            self.context_data['scan_results'] = mcp_result
+            
+            return FunctionResult(
+                success=True,
+                data=file_content,
+            )
+            
+        except Exception as e:
+            return FunctionResult(
+                success=False,
+                error=f"Scan failed: {str(e)}"
+            )
     def _execute_scan(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
         """Thực hiện scan với xử lý lỗi"""
         try:
@@ -128,16 +163,16 @@ class AgenticProcessor:
         """Thực hiện export với xử lý lỗi"""
         try:
             # Có thể sử dụng dữ liệu từ các bước trước
-            export_data = self.context_data.get('classify_results') or \
-                         self.context_data.get('scan_results') or \
-                         self.context_data.get('search_results')
+            # export_data = self.context_data.get('classify_results') or \
+            #              self.context_data.get('scan_results') or \
+            #              self.context_data.get('search_results')
             
-            if not export_data:
-                return FunctionResult(
-                    success=False,
-                    error="Không có dữ liệu để xuất metadata",
-                    missing_data=["export_data"]
-                )
+            # if not export_data:
+            #     return FunctionResult(
+            #         success=False,
+            #         error="Không có dữ liệu để xuất metadata",
+            #         missing_data=["export_data"]
+            #     )
             
             mcp_result = process_filesystem_query("", "export")
             formatted_result = "Xuất metadata thành công"
@@ -259,6 +294,8 @@ def process_prompt_agent(prompt: str) -> str:
                     'success': True,
                     'output': step_result.data
                 })
+                print(f"Step processed successfully: {processor.execution_history[-1].get('output', '')}")
+
             else:
                 # Xử lý lỗi
                 error_handling = processor.handle_step_failure(

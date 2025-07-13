@@ -279,7 +279,33 @@ class FilesystemManager:
                 "files": []
             }
 
-
+    def read_file_content(self, filepath: str) -> Dict:
+        """Đọc nội dung file"""
+        try:
+            from mcp_filesystem_server import file_indexer
+            
+            metadata = file_indexer.file_index.get(filepath)
+            if metadata and hasattr(metadata, 'content'):
+                content = metadata.content[:CONTENT_PREVIEW_LIMIT] + "..." if len(metadata.content) > CONTENT_PREVIEW_LIMIT else metadata.content
+                return {
+                    "success": True,
+                    "filepath": filepath,
+                    "content": content
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Không tìm thấy nội dung file: {filepath}",
+                    "content": None
+                }
+                
+        except Exception as e:
+            logger.error(f"Lỗi đọc nội dung file: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "content": None
+            }
 
 
 # Instance global để sử dụng trong ứng dụng
@@ -358,7 +384,18 @@ def process_filesystem_query(query: str, query_type: str = "search") -> str:
                     return f"Không tìm thấy file nào liên quan đến nhóm '{query}'"
             else:
                 return f"Lỗi phân loại theo chủ đề: {result['error']}"
-        
+        elif query_type == "search_exactly":
+            result = filesystem_manager.classify_files_by_topic(query)
+            if result["success"]:
+                if result["found"] > 0:
+                    files_text = "\n".join([
+                        f"• {f['filename']}" for f in result["files"]
+                    ])
+                    return f"Tìm thấy {result['found']} file liên quan đến nhóm '{query}':\n{files_text}"
+                else:
+                    return f"Không tìm thấy file nào liên quan đến nhóm '{query}'"
+            else:
+                return f"Lỗi phân loại theo chủ đề: {result['error']}"
         else:
             return f"Loại query không được hỗ trợ: {query_type}"
             
