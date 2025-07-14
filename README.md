@@ -1,4 +1,13 @@
 
+Thành viên 
+
+Nguyễn Lâm Quế Anh - 20120428
+Nguyễn Đình Nam Thuận - 21120339
+Nguyễn Hưng Yên - 21120372
+Trần Tấn Sang- 21120618
+
+
+
 # Lưu Ý 2:  models -> rất nặng. Máy ai dưới 16Gb nhớ đọc Lưu ý 1.
             Nhớ đổi   n_threads= số core CPU,
 
