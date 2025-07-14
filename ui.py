@@ -252,7 +252,8 @@ def create_interface():
                             "Phân loại các file liên quan đến tài chính",
                             "Xuất metadata để backup",
                             "Có file nào về machine learning không?" , 
-                            "Hãy so sánh hai file marketing-2024.docx và marketing-2025.docx"
+                            "Hãy so sánh hai file marketing-2024.docx và marketing-2025.docx",
+                            "Tôi không muốn bạn gợi ý hay recommend trong câu trả lời cho những lần trả lời sau",
                         ],
                         inputs=msg,
                         label="💡 Ví dụ câu hỏi:"

@@ -129,7 +129,7 @@ Yêu cầu: So sánh file marketing 2024 và 2025
 """
 
 def get_json_response(user_input: str, max_retries: int = 3) -> Optional[ActionPlan]:
-    prompt = get_prompt(user_input)
+    prompt = get_prompt_english(user_input)
     
     for attempt in range(max_retries):
         try:
@@ -264,5 +264,106 @@ Bạn là AI Assistant tạo kế hoạch hành động. Trả về **chỉ JSON
 **Yêu cầu**: "{user_input}"
 
 **JSON**:
+[/INST]
+"""
+
+
+
+def get_prompt_english(user_input: str) -> str:
+    user_feedback = get_user_feedback()
+    return f"""
+[INST]
+You are an AI Assistant that creates action plans. Return **only a JSON object**, do not add any text, explanation, markdown, or any characters other than JSON.
+
+**RULES**:
+- JSON must start with {{ and end with }}
+- Do not add blank lines, comments, or any content other than JSON
+- If action is not in the FUNCTIONS list, use "general"
+- "general" is always the last step (if necessary, if function is sufficient then this step is not needed)
+- If classify_by_topic or classify steps exist, do not add search step
+- Each step must have: step (number), description (Vietnamese description), function (function name), parameters (object, can be empty), required_data (array)
+- Only use functions as requested by user, do not automatically add other steps
+- Must follow user feedback with {user_feedback}, if empty then can ignore
+
+**AVAILABLE FUNCTIONS**:
+- scan: Scan file content to get detailed information
+- read: Read file content
+- write: Write/create new file
+- classify: Required to classify all files by content or metadata, must not add search step
+- classify_by_topic: Classify files by topic, must not add search step
+- search_exactly: Search for files by exact name, for example comparing two files, summarizing file content
+- search: if classify_by_topic or classify exists then absolutely do not add this step. Function: Search files by name or content
+- export: Export data, metadata to format
+- learn: When user provides feedback, use this function to record that feedback, or when user wants system to remember answer rules, or when user wants to remember response rules
+
+**search_exactly**: 
+- Use when need to FIND SPECIFIC FILES by name
+- Trigger words: "file [name]", "compare [file1] and [file2]", "summarize [filename]"
+- Examples: "compare marketing 2024 and 2025", "read file budget.xlsx"
+- With required_data for this function: List of files needed to perform this step, example ["marketing-2024.docx"]
+
+**search**: 
+- Use when searching by CONTENT/topic
+- Trigger words: "find", "search", "any file", "file about"
+- Examples: "find file about marketing", "any file talking about budget"
+
+**TRIGGER WORDS**:
+- learn: "next time", "don't", "no need", "change the way", "I want you", "remember that", "from now", "feedback"
+- search_exactly: "file [name]", "compare [file1] and [file2]", "summarize [filename]"
+- search: "find", "search", "any file", "file about"
+
+**Priority rules:**
+1. If there is specific file name → search_exactly
+2. If there are general keywords → search
+3. If already have classify/classify_by_topic → DO NOT need search
+
+JSON **must have all the following fields**:
+task_description: brief description of user request (in Vietnamese)
+steps: list of action steps as requested (descriptions in Vietnamese)
+expected_output: output result user expects (in Vietnamese)
+recommendations: suggestions for additional useful functions or actions (in Vietnamese)
+
+Must return complete closing brackets and no JSON syntax errors.
+
+**learn EXAMPLES**:
+- "Next time no need to greet me" → learn
+- "Next time no need to give suggestions" → learn  
+- "Remember that I don't like..." → learn
+
+**EXAMPLE**:
+Request: Compare marketing 2024 and 2025 files
+{{
+  "task_description": "So sánh file marketing 2024 và 2025",
+  "steps": [
+    {{
+      "step": 1,
+      "description": "Tìm file marketing 2024",
+      "function": "search",
+      "parameters": {{"query": "marketing 2024"}},
+      "required_data": ["file marketing 2024"]
+    }},
+    {{
+      "step": 2,
+      "description": "Tìm file marketing 2025",
+      "function": "search",
+      "parameters": {{"query": "marketing 2025"}},
+      "required_data": ["file marketing 2025"]
+    }},
+    {{
+      "step": 3,
+      "description": "So sánh nội dung hai file",
+      "function": "general",
+      "parameters": {{}},
+      "required_data": ["so sánh chi tiết"]
+    }}
+  ],
+  "expected_output": "Báo cáo so sánh marketing 2024 vs 2025",
+  "recommendations": "Bạn có thể thêm bước phân loại file theo chủ đề nếu cần thiết"
+}}
+
+**User request**:
+"{user_input}"
+
+**JSON Output**:
 [/INST]
 """
