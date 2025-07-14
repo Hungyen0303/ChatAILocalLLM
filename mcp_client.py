@@ -6,6 +6,8 @@ Kết nối với MCP Filesystem Server từ ứng dụng Chat AI
 import requests
 import json
 import subprocess
+from pathlib import Path
+
 import sys
 from typing import Dict, List, Any, Optional
 import logging
@@ -101,9 +103,7 @@ class FilesystemManager:
             # Import local filesystem indexer để chạy đồng bộ
             from mcp_filesystem_server import file_indexer
             from pathlib import Path
-            
             files = file_indexer.scan_directory(Path(directory))
-            
             result = {
                 "success": True,
                 "message": f"Đã quét và index {len(files)} file",
@@ -124,7 +124,7 @@ class FilesystemManager:
             return result
             
         except Exception as e:
-            logger.error(f"Lỗi quét file: {e}")
+            print(f"Lỗi quét file: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -214,8 +214,9 @@ class FilesystemManager:
         """Lấy thông tin chi tiết của file"""
         try:
             from mcp_filesystem_server import file_indexer
-            
-            metadata = file_indexer.file_index.get(filepath)
+
+            base = Path('D:/Subject/CMN/ChatAILocalLLM/test_files')
+            metadata = file_indexer.file_index.get(str(base / filepath))
             if metadata:
                 result = {
                     "success": True,
@@ -385,17 +386,12 @@ def process_filesystem_query(query: str, query_type: str = "search") -> str:
             else:
                 return f"Lỗi phân loại theo chủ đề: {result['error']}"
         elif query_type == "search_exactly":
-            result = filesystem_manager.classify_files_by_topic(query)
+            result = filesystem_manager.get_file_info(query)
             if result["success"]:
-                if result["found"] > 0:
-                    files_text = "\n".join([
-                        f"• {f['filename']}" for f in result["files"]
-                    ])
-                    return f"Tìm thấy {result['found']} file liên quan đến nhóm '{query}':\n{files_text}"
-                else:
-                    return f"Không tìm thấy file nào liên quan đến nhóm '{query}'"
+                print(f"Đã lấy thông tin file: {result['file']['filename']}")
+                return result["file"]['content_preview']
             else:
-                return f"Lỗi phân loại theo chủ đề: {result['error']}"
+                return f"Không tìm thầy file"
         else:
             return f"Loại query không được hỗ trợ: {query_type}"
             

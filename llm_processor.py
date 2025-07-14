@@ -14,7 +14,7 @@ try:
     MCP_AVAILABLE = True
     logging.info("MCP Filesystem client loaded")
 except ImportError as e:
-    logging.warning(f"MCP Filesystem not available: {e}")
+    print(f"MCP Filesystem not available: {e}")
     MCP_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ try:
     )
     logger.info(f"Model loaded: {MODEL_FILENAME}")
 except Exception as e:
-    logger.error(f"Error loading model: {e}")
+    print(f"Error loading model: {e}")
     raise
 
 # Khởi tạo MCP Filesystem
@@ -201,7 +201,7 @@ def generate_simple_response(prompt: str) -> str:
     try:
         response = llm.create_chat_completion(
             messages=[
-                {"role": "system", "content": "Bạn là trợ lý AI. Phản hồi tin nhắn của user."},
+                {"role": "system", "content": "Bạn là trợ lý AI. Phản hồi tin nhắn của user. Hãy trả lời bằng tiếng Việt."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=300,
@@ -435,6 +435,26 @@ def search_handler(prompt: str) -> str:
     print(f"Search keyword: {keyword}")
     return keyword
 
+def search_file_exactly_handler(prompt: str) -> str:
+
+    fragment_prompt = f"""
+    [INST]
+    Từ yêu cầu sau đây, hãy trích xuất **chính xác 1 cụm từ khóa duy nhất** nó mang ý nghĩa là tên file cần tìm kiếm.
+    Chỉ trả về duy nhất từ khóa đó (không cần JSON, không giải thích).
+    Yêu cầu người dùng:
+    "{prompt}"
+    [/INST]
+    """
+    response = llm.create_chat_completion(
+        messages=[{"role": "user", "content": fragment_prompt}],
+        temperature=0.2,
+        max_tokens=512,
+        stop=["</s>"]
+    )
+    keyword = response["choices"][0]["message"]["content"].strip()
+    print(f"Search keyword: {keyword}")
+    return keyword
+
 def classify_handler(prompt: str) -> str:
     """Classify handler"""
 
@@ -470,8 +490,10 @@ def classify_handler(prompt: str) -> str:
     print(f"Classification targets: {targets}")
     return targets
 
-def generate_classify_result(mcp_files: list, classification_targets: dict) -> dict:
+def generate_classify_result(mcp_files: list) -> dict:
     """Generate classify result using LLM"""
+    print(f"File info for classification: {len(mcp_files)} files")
+    print(f"file_info: {mcp_files[1]}")
     file_info = [
         {
             "filename": f["filename"],
@@ -479,7 +501,7 @@ def generate_classify_result(mcp_files: list, classification_targets: dict) -> d
         }
         for f in mcp_files
     ]
-
+    print(f"File info for classification: {len(file_info)} files")
     # Bước 2: Tạo prompt lấy kết quả
     fragment_prompt = f"""
         [INST]
@@ -508,14 +530,12 @@ def generate_classify_result(mcp_files: list, classification_targets: dict) -> d
     )
     # Bước 4: Parse kết quả và gắn nhãn
     raw_output = response["choices"][0]["message"]["content"]
+    print(raw_output)
     data = extract_json_from_text(raw_output)
     result = json.loads(data)
-    print(f"Classification result: {result}")
     group_labels = result["classification_result"]
-
-    # if len(group_labels) != len(mcp_files):
-    #     raise ValueError("Số lượng nhóm trả về không khớp với số file.")
-
+    print(f"Group labels: {group_labels}")
+    print(f"Number of files: {len(mcp_files)}")
     for i in range(len(mcp_files)):
         mcp_files[i]["label"] = group_labels[i]
 

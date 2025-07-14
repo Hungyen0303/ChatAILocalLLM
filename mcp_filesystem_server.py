@@ -367,6 +367,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
     
     elif name == "get_file_info":
         filepath = arguments["filepath"]
+        print (f"filepath {filepath}")
         try:
             metadata = file_indexer.file_index.get(filepath)
             if metadata:

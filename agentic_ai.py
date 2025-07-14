@@ -31,6 +31,8 @@ class AgenticProcessor:
                 return self._execute_export(prompt, step)
             elif intent == 'classify_by_topic':
                 return self._execute_classify_by_topic(prompt, step)
+            elif intent == 'learn':
+                return self._execute_add_feedback(prompt, step)
             elif intent == 'general':
                 print(f"Thực hiện tác vụ chung: {step_description}")
                 data_context = ''
@@ -40,7 +42,7 @@ class AgenticProcessor:
                 generate_info = generate_simple_response(f"Với prompt {prompt} Hãy thực hiện tác vụ này :{step_description} 'với data hiện có là '  {data_context}. prompt không liên quan tới data hiện có. Chỉ trả về kết quả của tác vụ này.")
                 return FunctionResult(
                     success=True,
-                    data= step_description + generate_info
+                    data= f"{step_description} \n {generate_info}"
                 ) 
 
             else:
@@ -90,22 +92,23 @@ class AgenticProcessor:
     def _execute_search_and_read(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
         """Thực hiện scan với xử lý lỗi"""
         try:
-            # Có thể sử dụng dữ liệu từ bước trước
-            directory = self.context_data.get('target_directory', "")
-            mcp_result = process_filesystem_query(directory, "scan")
-            file_content = process_filesystem_query(directory, "read_file")            
-            # Lưu kết quả vào context
-            self.context_data['scan_results'] = mcp_result
-            
+            mcp_result = process_filesystem_query(step.get("required_data", "")[0], "search_exactly")
+            self.context_data['search_exactly'] = mcp_result
+            if mcp_result == "Không tìm thầy file":
+                return FunctionResult(
+                    success=False,
+                    error=f"Không tìm thấy file {step.get('required_data', '')[0]}",
+                    missing_data=[f"file {step.get('required_data', '')[0]}"]
+                )
             return FunctionResult(
                 success=True,
-                data=file_content,
+                data=mcp_result,
             )
             
         except Exception as e:
             return FunctionResult(
                 success=False,
-                error=f"Scan failed: {str(e)}"
+                error=f"Read failed: {str(e)}"
             )
     def _execute_scan(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
         """Thực hiện scan với xử lý lỗi"""
@@ -131,20 +134,17 @@ class AgenticProcessor:
     def _execute_classify(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
         """Thực hiện classify với xử lý lỗi"""
         try:
-            targets = classify_handler(prompt)
             
             # Sử dụng scan results từ bước trước nếu có
-            mcp_files = self.context_data.get('scan_results')
-            if not mcp_files:
-                mcp_files = process_filesystem_query("", "scan_all")
-            
+            mcp_files = process_filesystem_query("", "scan_all")
             if not mcp_files:
                 return FunctionResult(
                     success=False,
                     error="Không tìm thấy files để phân loại",
                     missing_data=["file_list"]
                 )
-            mcp_result = generate_classify_result(mcp_files, targets)
+            print("here now go to classify")
+            mcp_result = generate_classify_result(mcp_files)
             formatted_result = format_mcp_result(mcp_result, 'classify', prompt)
             self.context_data['classify_results'] = mcp_result
             
@@ -154,6 +154,7 @@ class AgenticProcessor:
             )
             
         except Exception as e:
+            print(f"Error during classification: {e}")
             return FunctionResult(
                 success=False,
                 error=f"Classification failed: {str(e)}"
@@ -187,7 +188,35 @@ class AgenticProcessor:
                 success=False,
                 error=f"Export failed: {str(e)}"
             )
-    
+    def _execute_add_feedback(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
+        try:
+            formatted_result = generate_simple_response(
+                f"""
+                [INST]
+
+                Hãy trích xuất phản hồi từ người dùng, trích xuất nó ngắn gọn
+                Và đây là phản hồi của người dùng: 
+                {prompt}
+                **LƯU Ý**:
+                - Chỉ trả về duy nhất phản hồi của người dùng, không thêm bất kỳ văn bản nào khác.
+                - Trả về ngắn gọn, súc tích, không giải thích hay mô tả thêm. 
+                [INST]
+
+
+                """
+            )
+            with open("user_feedback.txt", 'a', encoding='utf-8') as f:
+                f.write(formatted_result + "\n")   
+            return FunctionResult(
+                success=True,
+                data=formatted_result,
+            )
+            
+        except Exception as e:
+            return FunctionResult(
+                success=False,
+                error=f"Export failed: {str(e)}"
+            )
     def _execute_classify_by_topic(self, prompt: str, step: Dict[str, Any]) -> FunctionResult:
         """Thực hiện classify by topic với xử lý lỗi"""
         try:
@@ -260,6 +289,29 @@ class AgenticProcessor:
             return True
         return False
 
+
+processor = AgenticProcessor()
+
+def make_recommendation(prompt: str ) -> str:
+    """Tạo gợi ý hành động dựa trên prompt"""
+
+
+    context = "Ngữ cảnh hiện tại là: " + str(processor.execution_history[-1].get('error', ''))
+    system_prompt = f"""Bạn là một AI Assistant tạo kế hoạch hành động. Hãy gợi ý một hành động thay
+    thế hoặc giải pháp cho người dùng dựa trên prompt sau: {prompt}
+    Với ngữ cảnh hiện tại là: {context} 
+    Gợi ý phải dựa trên bước thực hiện chưa thành công với isSuccess là False
+    Hãy trả lời ngắn gọn bằng tiếng việt , ví dụ như
+    "Tôi không tìm thấy file này, bạn hãy upload vào hoặc kiểm tra lại" hoặc "Thử phân loại lại theo chủ đề khác".
+    """
+    try:
+        # Sử dụng LLM để tạo gợi ý
+        recommendation = generate_simple_response(f"{system_prompt} ")
+        return recommendation
+    except Exception as e:
+        print(f"Error generating recommendation: {e}")
+        return "Không thể tạo gợi ý, vui lòng thử lại sau."
+
 def process_prompt_agent(prompt: str) -> str:
     """
     Xử lý prompt như một agentic AI với khả năng xử lý lỗi và chuyển tiếp dữ liệu
@@ -279,8 +331,9 @@ def process_prompt_agent(prompt: str) -> str:
             return generate_simple_response(prompt)
         
         # Khởi tạo processor
-        processor = AgenticProcessor()
-        final_result = f"🎯 Đang xử lý: {action_plan_data.task_description}\n\n"
+        final_result = ""
+
+        final_result += f"🎯 Đang xử lý: {action_plan_data.task_description}\n\n"
         
         # Thực hiện từng bước
         for i, step in enumerate(action_plan_data.steps):
@@ -294,8 +347,6 @@ def process_prompt_agent(prompt: str) -> str:
                     'success': True,
                     'output': step_result.data
                 })
-                print(f"Step processed successfully: {processor.execution_history[-1].get('output', '')}")
-
             else:
                 # Xử lý lỗi
                 error_handling = processor.handle_step_failure(
@@ -308,18 +359,20 @@ def process_prompt_agent(prompt: str) -> str:
                     'success': False,
                     'error': step_result.error
                 })
-                
-                # Quyết định có tiếp tục hay không
+                break
                 if "🛑" in error_handling:
                     break
         
-        # Thêm tóm tắt kết quả
-        final_result += f"\n📋 Tóm tắt: Đã thực hiện {len(processor.execution_history)} bước"
-        success_count = sum(1 for h in processor.execution_history if h['success'])
-        final_result += f" ({success_count} thành công, {len(processor.execution_history) - success_count} thất bại)"
-        if action_plan_data.recommendations != None  and action_plan_data.recommendations != "": 
-            final_result += f"\n💡 Gợi ý: {action_plan_data.recommendations}"
-        return final_result.strip()
+        if processor.execution_history[-1].get('success', '') == True:
+            final_result += f"\n📋 Tóm tắt: Đã thực hiện {len(processor.execution_history)} bước"
+            success_count = sum(1 for h in processor.execution_history if h['success'])
+            final_result += f" ({success_count} thành công, {len(processor.execution_history) - success_count} thất bại)"
+            if action_plan_data.recommendations != None  and action_plan_data.recommendations != "" and action_plan_data.recommendations != "[]": 
+                final_result += f"\n💡 Gợi ý: {action_plan_data.recommendations}"
+            processor.execution_history.clear()
+            return final_result.strip()
+        else : 
+            return make_recommendation(prompt)
         
     except Exception as e:
         print(f"Critical error in process_prompt_agent: {e}")
